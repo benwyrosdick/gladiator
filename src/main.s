@@ -58,40 +58,40 @@ oam_shadow:        .res 256  ; must start at $0200 for $4014 DMA page = $02
 ; Tiles: background brick and two human walk frames
 tiles:
 bg_tile:
-        .byte %11111111, %00000000  ; row 0
-        .byte %10000001, %00000000  ; row 1
-        .byte %11111111, %00000000  ; row 2
-        .byte %10001001, %00000000  ; row 3
-        .byte %11111111, %00000000  ; row 4
-        .byte %10000001, %00000000  ; row 5
-        .byte %11111111, %00000000  ; row 6
-        .byte %10000001, %00000000  ; row 7
+	.byte %11111111, %11111111
+	.byte %11111111, %11111111
+	.byte %11111111, %11111111
+	.byte %11111111, %11111111
+	.byte %00000000, %00000000
+	.byte %00000000, %00000000
+	.byte %00000000, %00000000
+	.byte %00000000, %00000000
 
 player_walk1:
-        .byte %00110000, %00000000  ; row 0
-        .byte %00110000, %00000000  ; row 1
-        .byte %01111000, %00000000  ; row 2
-        .byte %01111000, %00000000  ; row 3
-        .byte %00110000, %00000000  ; row 4
-        .byte %00110000, %00000000  ; row 5
-        .byte %01001000, %00000000  ; row 6
-        .byte %10000100, %00000000  ; row 7
+	.byte %00110000, %00110000  ; row 0
+	.byte %00110000, %00110000  ; row 1
+	.byte %01001000, %01001000  ; row 2
+	.byte %00000000, %00000000  ; row 3
+	.byte %00110000, %00110000  ; row 4
+	.byte %00110000, %00110000  ; row 5
+	.byte %01111000, %01111000  ; row 6
+	.byte %11111100, %11111100  ; row 7
 
 player_walk2:
-        .byte %00110000, %00000000  ; row 0
-        .byte %00110000, %00000000  ; row 1
-        .byte %01111000, %00000000  ; row 2
-        .byte %01111000, %00000000  ; row 3
-        .byte %00110000, %00000000  ; row 4
-        .byte %00110000, %00000000  ; row 5
-        .byte %10010000, %00000000  ; row 6
-        .byte %01000010, %00000000  ; row 7
+	.byte %00110000, %00110000  ; row 0
+	.byte %00110000, %00110000  ; row 1
+	.byte %01111000, %01111000  ; row 2
+	.byte %01111000, %01111000  ; row 3
+	.byte %00110000, %00110000  ; row 4
+	.byte %00110000, %00110000  ; row 5
+	.byte %10010000, %10010000  ; row 6
+	.byte %01000010, %01000010  ; row 7
 tiles_end:
 
 ; Background palette (4 colors) + 3 more sub-palettes (unused)
 ; Values are NES palette indices. $0F is black.
 bg_palette:
-        .byte $0F, $27, $16, $30   ; warm roman tones
+  .byte $30, $27, $16, $30   ; warm roman tones (universal background set to white)
 	.byte $0F, $00, $10, $20   ; BG palette 1
 	.byte $0F, $06, $16, $26   ; BG palette 2
 	.byte $0F, $09, $19, $29   ; BG palette 3
@@ -151,48 +151,48 @@ load_spr_pal:
 	cpx #$10
 	bne load_spr_pal
 
-        ; Upload tiles into CHR-RAM at $0000
-        lda #$00
-        sta PPUADDR
-        sta PPUADDR
+	; Upload tiles into CHR-RAM at $0000
+	lda #$00
+	sta PPUADDR
+	sta PPUADDR
 
-        ldx #$00
+	ldx #$00
 load_tiles:
-        lda tiles, x
-        sta PPUDATA
-        inx
-        cpx #(tiles_end - tiles)
-        bne load_tiles
+	lda tiles, x
+	sta PPUDATA
+	inx
+	cpx #(tiles_end - tiles)
+	bne load_tiles
 
-        ; Fill nametable with background tile
-        lda #$20
-        sta PPUADDR
-        lda #$00
-        sta PPUADDR
+	; Fill nametable with background tile
+	lda #$20
+	sta PPUADDR
+	lda #$00
+	sta PPUADDR
 
-        ldx #$1E              ; 30 rows
+	ldx #$1E              ; 30 rows
 fill_nt_row:
-        ldy #$20              ; 32 columns
+	ldy #$20              ; 32 columns
 fill_nt_col:
-        lda #$00              ; bg_tile index
-        sta PPUDATA
-        dey
-        bne fill_nt_col
-        dex
-        bne fill_nt_row
+	lda #$00              ; bg_tile index
+	sta PPUDATA
+	dey
+	bne fill_nt_col
+	dex
+	bne fill_nt_row
 
-        ; Set attribute table to palette 0
-        lda #$23
-        sta PPUADDR
-        lda #$C0
-        sta PPUADDR
-        ldx #$00
+	; Set attribute table to palette 0
+	lda #$23
+	sta PPUADDR
+	lda #$C0
+	sta PPUADDR
+	ldx #$00
 fill_attr:
-        lda #$00
-        sta PPUDATA
-        inx
-        cpx #$40
-        bne fill_attr
+	lda #$00
+	sta PPUDATA
+	inx
+	cpx #$40
+	bne fill_attr
 
         ; Initialize OAM shadow: hide all sprites (Y=$FF at each entry)
 	ldx #$00
@@ -208,15 +208,15 @@ hide_all_sprites:
 	; Initialize first sprite position and data
 	lda #120
 	sta sprite_x
-        lda #100
-        sta sprite_y
-        lda #$00
-        sta anim_frame
-        lda sprite_y
-        sta oam_shadow+0     ; Y
-        lda #PLAYER_TILE1
-        sta oam_shadow+1     ; tile index
-        lda #%00000000
+	lda #100
+	sta sprite_y
+	lda #$00
+	sta anim_frame
+	lda sprite_y
+	sta oam_shadow+0     ; Y
+	lda #PLAYER_TILE1
+	sta oam_shadow+1     ; tile index
+	lda #%00000000
 	sta oam_shadow+2     ; attributes
 	lda sprite_x
 	sta oam_shadow+3     ; X
@@ -260,33 +260,33 @@ no_down:
 	dec sprite_y
 no_up:
 
-        ; handle walking animation and write to OAM shadow
-        lda pad1
-        and #$F0              ; any D-pad pressed?
-        beq still
-        inc anim_frame
-        lda anim_frame
-        and #$01
-        beq use_walk1
-        lda #PLAYER_TILE2
-        bne set_tile
+	; handle walking animation and write to OAM shadow
+	lda pad1
+	and #$F0              ; any D-pad pressed?
+	beq still
+	inc anim_frame
+	lda anim_frame
+	and #$01
+	beq use_walk1
+	lda #PLAYER_TILE2
+	bne set_tile
 use_walk1:
-        lda #PLAYER_TILE1
+	lda #PLAYER_TILE1
 set_tile:
-        sta oam_shadow+1
-        jmp store_pos
+	sta oam_shadow+1
+	jmp store_pos
 still:
-        lda #PLAYER_TILE1
-        sta oam_shadow+1
-        lda #$00
-        sta anim_frame
+	lda #PLAYER_TILE1
+	sta oam_shadow+1
+	lda #$00
+	sta anim_frame
 store_pos:
-        lda sprite_y
-        sta oam_shadow+0
-        lda sprite_x
-        sta oam_shadow+3
+	lda sprite_y
+	sta oam_shadow+0
+	lda sprite_x
+	sta oam_shadow+3
 
-        jmp main_loop
+	jmp main_loop
 
 wait_vblank:
 	; Wait for bit 7 of PPUSTATUS to go 1 (vblank)
