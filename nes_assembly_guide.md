@@ -150,7 +150,10 @@ $2000-$2007: PPU Registers
 $2008-$3FFF: Mirrors of $2000-$2007
 $4000-$4017: APU and I/O Registers
 $4018-$401F: APU and I/O (usually disabled)
-$4020-$FFFF: Cartridge space (ROM, RAM, mapper registers)
+$4020-$5FFF: Cartridge Expansion ROM
+$6000-$7FFF: SRAM
+$8000-$BFFF: PRG-ROM
+$C000-$FFFF: PRG-ROM
 ```
 
 ### Important Memory Regions
