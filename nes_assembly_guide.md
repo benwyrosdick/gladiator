@@ -452,6 +452,394 @@ draw_large_character:
     RTS
 ```
 
+## Building Background Scenes
+
+### Understanding Nametables
+
+The NES background is composed of 32×30 tiles (256×240 pixels). Each screen is called a nametable, stored in PPU memory:
+
+```
+Nametable layout (32×30 tiles):
+$2000-$23BF: Tile indices (960 bytes)
+$23C0-$23FF: Attribute table (64 bytes)
+```
+
+### Creating a Simple Background
+
+```assembly
+; Load a full screen background
+load_background:
+    LDA $2002        ; Reset PPU latch
+    LDA #$20         ; High byte of nametable 0
+    STA $2006
+    LDA #$00         ; Low byte
+    STA $2006
+    
+    ; Load 960 tiles (32×30)
+    LDX #$00
+    LDY #$00
+load_bg_loop:
+    LDA background_data, X
+    STA $2007
+    INX
+    BNE load_bg_loop
+    INC load_bg_loop+2  ; Increment high byte of source
+    INY
+    CPY #$04         ; 4 pages = 960 bytes (with some extra)
+    BNE load_bg_loop
+    RTS
+
+; Example background data
+background_data:
+    ; Sky row (repeated)
+    .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+    .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+    ; ... more rows
+```
+
+### Attribute Tables
+
+Attribute tables control which palette each 16×16 pixel area uses. Each byte controls a 32×32 pixel area (2×2 tiles):
+
+```assembly
+; Attribute byte layout:
+; 76543210
+; ||||||||
+; ||||||++- Top-left 2×2 block palette
+; ||||++--- Top-right 2×2 block palette
+; ||++----- Bottom-left 2×2 block palette
+; ++------- Bottom-right 2×2 block palette
+
+load_attributes:
+    LDA $2002
+    LDA #$23         ; Attribute table high byte
+    STA $2006
+    LDA #$C0         ; Attribute table low byte
+    STA $2006
+    
+    LDX #$00
+attr_loop:
+    LDA attribute_data, X
+    STA $2007
+    INX
+    CPX #$40         ; 64 attribute bytes
+    BNE attr_loop
+    RTS
+
+attribute_data:
+    ; Each byte controls 4 2×2 tile blocks
+    .db %00000000    ; All use palette 0
+    .db %01010101    ; All use palette 1
+    .db %10101010    ; All use palette 2
+    .db %11111111    ; All use palette 3
+    ; ... 60 more bytes
+```
+
+### Building Complex Scenes
+
+#### Metatile System
+
+For efficient level design, use metatiles (2×2 or larger tile groups):
+
+```assembly
+; Define metatiles as 2×2 tile blocks
+metatile_grass:
+    .db $80,$81      ; Top row tiles
+    .db $90,$91      ; Bottom row tiles
+    .db %00          ; Palette 0
+
+metatile_brick:
+    .db $82,$83
+    .db $92,$93
+    .db %01          ; Palette 1
+
+metatile_water:
+    .db $84,$85
+    .db $94,$95
+    .db %10          ; Palette 2
+
+; Draw a metatile at specific position
+; X = metatile X position (0-15)
+; Y = metatile Y position (0-14)
+draw_metatile:
+    ; Calculate nametable address
+    TYA
+    ASL A            ; Y * 2
+    ASL A            ; Y * 4
+    ASL A            ; Y * 8
+    ASL A            ; Y * 16
+    ASL A            ; Y * 32
+    STA temp_lo
+    LDA #$20         ; Nametable 0 base
+    STA temp_hi
+    
+    TXA
+    ASL A            ; X * 2
+    CLC
+    ADC temp_lo
+    STA temp_lo
+    BCC no_carry
+    INC temp_hi
+no_carry:
+    
+    ; Set PPU address
+    LDA $2002
+    LDA temp_hi
+    STA $2006
+    LDA temp_lo
+    STA $2006
+    
+    ; Draw top row
+    LDA metatile_data+0
+    STA $2007
+    LDA metatile_data+1
+    STA $2007
+    
+    ; Move to next row
+    LDA temp_lo
+    CLC
+    ADC #$20         ; Next row is 32 tiles down
+    STA temp_lo
+    BCC no_carry2
+    INC temp_hi
+no_carry2:
+    
+    LDA $2002
+    LDA temp_hi
+    STA $2006
+    LDA temp_lo
+    STA $2006
+    
+    ; Draw bottom row
+    LDA metatile_data+2
+    STA $2007
+    LDA metatile_data+3
+    STA $2007
+    RTS
+```
+
+#### Compression Techniques
+
+For larger levels, use compression:
+
+```assembly
+; RLE (Run-Length Encoding) decompression
+decompress_rle:
+    LDX #$00
+    LDY #$00
+decomp_loop:
+    LDA compressed_data, X
+    CMP #$FF         ; End marker
+    BEQ decomp_done
+    
+    ; Check if RLE marker (high bit set)
+    BMI is_rle
+    
+    ; Single tile
+    STA $2007
+    INX
+    JMP decomp_loop
+    
+is_rle:
+    AND #$7F         ; Clear high bit to get count
+    STA temp_count
+    INX
+    LDA compressed_data, X  ; Get tile to repeat
+    LDY temp_count
+repeat_loop:
+    STA $2007
+    DEY
+    BNE repeat_loop
+    INX
+    JMP decomp_loop
+    
+decomp_done:
+    RTS
+
+; Example compressed data
+compressed_data:
+    .db $00          ; Single sky tile
+    .db $80|20, $00  ; Repeat sky 20 times
+    .db $01,$02,$03  ; Three different tiles
+    .db $80|10, $04  ; Repeat tile $04 10 times
+    .db $FF          ; End marker
+```
+
+#### Screen Transitions
+
+For smooth screen transitions:
+
+```assembly
+; Column-based screen loading for horizontal scrolling
+load_new_column:
+    ; X = column number (0-31)
+    TXA
+    STA temp_column
+    
+    ; Calculate starting nametable address
+    LDA scroll_x
+    LSR A
+    LSR A
+    LSR A            ; Divide by 8 to get tile column
+    AND #$1F         ; Wrap at 32
+    STA temp_addr_lo
+    
+    LDA #$20         ; Or $24 for second nametable
+    STA temp_addr_hi
+    
+    LDY #$00         ; Row counter
+column_loop:
+    ; Set PPU address for this row
+    LDA $2002
+    LDA temp_addr_hi
+    STA $2006
+    
+    TYA
+    ASL A
+    ASL A
+    ASL A
+    ASL A
+    ASL A            ; Y * 32
+    CLC
+    ADC temp_column
+    STA $2006
+    
+    ; Load tile for this position
+    LDA new_screen_data, Y
+    STA $2007
+    
+    INY
+    CPY #30          ; 30 rows
+    BNE column_loop
+    RTS
+```
+
+### Animated Backgrounds
+
+Create animated tiles by swapping CHR data:
+
+```assembly
+; Animate water tiles
+animate_water:
+    INC frame_counter
+    LDA frame_counter
+    AND #$0F         ; Every 16 frames
+    BNE skip_water
+    
+    ; Swap between water animation frames
+    LDA water_frame
+    EOR #$01
+    STA water_frame
+    
+    ; Update specific tiles in nametable
+    LDA $2002
+    LDA #$21         ; Address of water tile
+    STA $2006
+    LDA #$84
+    STA $2006
+    
+    LDA water_frame
+    BNE water_frame2
+    LDA #$84         ; Water tile 1
+    JMP write_water
+water_frame2:
+    LDA #$86         ; Water tile 2
+write_water:
+    STA $2007
+    
+skip_water:
+    RTS
+```
+
+### Complete Scene Example
+
+```assembly
+; Build a simple platformer scene
+build_scene:
+    ; Clear nametable first
+    JSR clear_nametable
+    
+    ; Draw sky (rows 0-20)
+    LDX #$00
+    LDY #$00
+sky_loop:
+    JSR draw_sky_row
+    INY
+    CPY #20
+    BNE sky_loop
+    
+    ; Draw ground (rows 21-29)
+ground_loop:
+    JSR draw_ground_row
+    INY
+    CPY #30
+    BNE ground_loop
+    
+    ; Add clouds
+    LDX #$05         ; X position
+    LDY #$03         ; Y position
+    JSR draw_cloud
+    
+    LDX #$14
+    LDY #$05
+    JSR draw_cloud
+    
+    ; Add platforms
+    LDX #$08
+    LDY #$10
+    LDA #$06         ; 6 tiles wide
+    JSR draw_platform
+    
+    ; Load attribute table
+    JSR load_scene_attributes
+    RTS
+
+draw_platform:
+    STA platform_width
+    ; Calculate nametable address
+    TYA
+    ASL A
+    ASL A
+    ASL A
+    ASL A
+    ASL A
+    STA temp_lo
+    TXA
+    CLC
+    ADC temp_lo
+    STA temp_lo
+    LDA #$20
+    ADC #$00
+    STA temp_hi
+    
+    ; Set PPU address
+    LDA $2002
+    LDA temp_hi
+    STA $2006
+    LDA temp_lo
+    STA $2006
+    
+    ; Draw platform tiles
+    LDX #$00
+platform_loop:
+    LDA #$C0         ; Platform tile
+    STA $2007
+    INX
+    CPX platform_width
+    BNE platform_loop
+    RTS
+```
+
+### Tips for Background Design
+
+1. **Plan your tile usage:** You only have 256 tiles available
+2. **Reuse tiles creatively:** Flip and rotate tiles for variety
+3. **Use metatiles:** Simplifies level design and reduces data
+4. **Consider attribute restrictions:** Plan 16×16 areas for palette usage
+5. **Optimize for scrolling:** Design seamless transitions between screens
+6. **Use compression:** Essential for larger games
+7. **Animate sparingly:** Too many animated tiles can be distracting
+
 ## Controller Input
 
 ### Reading Controllers
