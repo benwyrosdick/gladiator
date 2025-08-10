@@ -220,15 +220,15 @@ palette_loop:
 
 palette_data:
     ; Background palettes
-    .db $0F, $31, $32, $33  ; Palette 0
-    .db $0F, $35, $36, $37  ; Palette 1
-    .db $0F, $39, $3A, $3B  ; Palette 2
-    .db $0F, $3D, $3E, $0F  ; Palette 3
+    .byte $0F, $31, $32, $33  ; Palette 0
+    .byte $0F, $35, $36, $37  ; Palette 1
+    .byte $0F, $39, $3A, $3B  ; Palette 2
+    .byte $0F, $3D, $3E, $0F  ; Palette 3
     ; Sprite palettes
-    .db $0F, $16, $27, $18  ; Palette 0
-    .db $0F, $02, $38, $3C  ; Palette 1
-    .db $0F, $1C, $15, $14  ; Palette 2
-    .db $0F, $02, $38, $3C  ; Palette 3
+    .byte $0F, $16, $27, $18  ; Palette 0
+    .byte $0F, $02, $38, $3C  ; Palette 1
+    .byte $0F, $1C, $15, $14  ; Palette 2
+    .byte $0F, $02, $38, $3C  ; Palette 3
 ```
 
 ### Working with Tiles
@@ -239,23 +239,23 @@ Tiles are 8×8 pixel graphics stored in pattern tables. Each tile uses 16 bytes:
 ; Example tile data (a simple cross pattern)
 cross_tile:
     ; Plane 0 (low bits)
-    .db %00011000
-    .db %00011000  
-    .db %11111111
-    .db %11111111
-    .db %11111111
-    .db %11111111
-    .db %00011000
-    .db %00011000
+    .byte %00011000
+    .byte %00011000  
+    .byte %11111111
+    .byte %11111111
+    .byte %11111111
+    .byte %11111111
+    .byte %00011000
+    .byte %00011000
     ; Plane 1 (high bits)
-    .db %00000000
-    .db %00000000
-    .db %00000000
-    .db %00000000
-    .db %00000000
-    .db %00000000
-    .db %00000000
-    .db %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
+    .byte %00000000
 ```
 
 ### Drawing Background Tiles
@@ -303,24 +303,24 @@ Sprites use 2-bit color values (0-3) that index into the selected palette:
 ; Example sprite tile data with transparency
 player_sprite:
     ; Plane 0 (low bits) - defines bit 0 of each pixel
-    .db %00111100    ; Row 0:  __####__
-    .db %01111110    ; Row 1:  _######_
-    .db %11011011    ; Row 2:  ##_##_##
-    .db %11111111    ; Row 3:  ########
-    .db %10111101    ; Row 4:  #_####_#
-    .db %10100101    ; Row 5:  #_#__#_#
-    .db %10000001    ; Row 6:  #______#
-    .db %01111110    ; Row 7:  _######_
+    .byte %00111100    ; Row 0:  __####__
+    .byte %01111110    ; Row 1:  _######_
+    .byte %11011011    ; Row 2:  ##_##_##
+    .byte %11111111    ; Row 3:  ########
+    .byte %10111101    ; Row 4:  #_####_#
+    .byte %10100101    ; Row 5:  #_#__#_#
+    .byte %10000001    ; Row 6:  #______#
+    .byte %01111110    ; Row 7:  _######_
     
     ; Plane 1 (high bits) - defines bit 1 of each pixel
-    .db %00000000    ; Row 0
-    .db %00111100    ; Row 1
-    .db %01111110    ; Row 2
-    .db %01111110    ; Row 3
-    .db %00111100    ; Row 4
-    .db %00000000    ; Row 5
-    .db %00000000    ; Row 6
-    .db %00000000    ; Row 7
+    .byte %00000000    ; Row 0
+    .byte %00111100    ; Row 1
+    .byte %01111110    ; Row 2
+    .byte %01111110    ; Row 3
+    .byte %00111100    ; Row 4
+    .byte %00000000    ; Row 5
+    .byte %00000000    ; Row 6
+    .byte %00000000    ; Row 7
 
 ; The two planes combine to form 2-bit color values:
 ; Plane1 Plane0 = Color Index
@@ -384,24 +384,24 @@ Transparency is automatic for color 0 in sprites. Here's how to design sprites w
 ; Creating a coin sprite with transparent background
 coin_sprite:
     ; Plane 0 - notice the outer pixels are 0
-    .db %00111100    ;   ####
-    .db %01000010    ;  #    #
-    .db %10000001    ; #      #
-    .db %10011001    ; #  ##  #
-    .db %10011001    ; #  ##  #
-    .db %10000001    ; #      #
-    .db %01000010    ;  #    #
-    .db %00111100    ;   ####
+    .byte %00111100    ;   ####
+    .byte %01000010    ;  #    #
+    .byte %10000001    ; #      #
+    .byte %10011001    ; #  ##  #
+    .byte %10011001    ; #  ##  #
+    .byte %10000001    ; #      #
+    .byte %01000010    ;  #    #
+    .byte %00111100    ;   ####
     
     ; Plane 1 - also 0 for transparent pixels
-    .db %00000000    ; All outer pixels remain 00 (transparent)
-    .db %00111100    ; Inner pixels get color values
-    .db %01111110
-    .db %01100110
-    .db %01100110
-    .db %01111110
-    .db %00111100
-    .db %00000000
+    .byte %00000000    ; All outer pixels remain 00 (transparent)
+    .byte %00111100    ; Inner pixels get color values
+    .byte %01111110
+    .byte %01100110
+    .byte %01100110
+    .byte %01111110
+    .byte %00111100
+    .byte %00000000
 
 ; Metasprite example - combining multiple sprites
 draw_large_character:
@@ -495,8 +495,8 @@ load_bg_loop:
 ; Example background data
 background_data:
     ; Sky row (repeated)
-    .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
-    .db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+    .byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+    .byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
     ; ... more rows
 ```
 
@@ -531,10 +531,10 @@ attr_loop:
 
 attribute_data:
     ; Each byte controls 4 2×2 tile blocks
-    .db %00000000    ; All use palette 0
-    .db %01010101    ; All use palette 1
-    .db %10101010    ; All use palette 2
-    .db %11111111    ; All use palette 3
+    .byte %00000000    ; All use palette 0
+    .byte %01010101    ; All use palette 1
+    .byte %10101010    ; All use palette 2
+    .byte %11111111    ; All use palette 3
     ; ... 60 more bytes
 ```
 
@@ -547,19 +547,19 @@ For efficient level design, use metatiles (2×2 or larger tile groups):
 ```assembly
 ; Define metatiles as 2×2 tile blocks
 metatile_grass:
-    .db $80,$81      ; Top row tiles
-    .db $90,$91      ; Bottom row tiles
-    .db %00          ; Palette 0
+    .byte $80,$81      ; Top row tiles
+    .byte $90,$91      ; Bottom row tiles
+    .byte %00          ; Palette 0
 
 metatile_brick:
-    .db $82,$83
-    .db $92,$93
-    .db %01          ; Palette 1
+    .byte $82,$83
+    .byte $92,$93
+    .byte %01          ; Palette 1
 
 metatile_water:
-    .db $84,$85
-    .db $94,$95
-    .db %10          ; Palette 2
+    .byte $84,$85
+    .byte $94,$95
+    .byte %10          ; Palette 2
 
 ; Draw a metatile at specific position
 ; X = metatile X position (0-15)
@@ -661,11 +661,11 @@ decomp_done:
 
 ; Example compressed data
 compressed_data:
-    .db $00          ; Single sky tile
-    .db $80|20, $00  ; Repeat sky 20 times
-    .db $01,$02,$03  ; Three different tiles
-    .db $80|10, $04  ; Repeat tile $04 10 times
-    .db $FF          ; End marker
+    .byte $00          ; Single sky tile
+    .byte $80|20, $00  ; Repeat sky 20 times
+    .byte $01,$02,$03  ; Three different tiles
+    .byte $80|10, $04  ; Repeat tile $04 10 times
+    .byte $FF          ; End marker
 ```
 
 #### Screen Transitions
