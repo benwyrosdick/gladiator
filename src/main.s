@@ -30,8 +30,16 @@ OAMDATA   = $2004
 PPUADDR   = $2006
 PPUDATA   = $2007
 
+; Tile indices (based on order in CHR-RAM)
+BG_TILE_IDX = $00
 PLAYER_TILE1 = $01
 PLAYER_TILE2 = $02
+PLAYER_IDLE_0 = $03
+PLAYER_IDLE_1 = $04
+PLAYER_IDLE_2 = $05
+PLAYER_IDLE_3 = $06
+PLAYER_WALK_2 = $07
+PLAYER_WALK_3 = $08
 
 ; -------------------------
 ; Zero page
@@ -43,6 +51,8 @@ pad1:             .res 1   ; controller 1 current state
 sprite_x:         .res 1
 sprite_y:         .res 1
 anim_frame:       .res 1   ; walking animation toggle
+metasprite_ptr_lo: .res 1   ; pointer to current metasprite data
+metasprite_ptr_hi: .res 1
 
 ; -------------------------
 ; Work RAM (OAM shadow at $0200 page for DMA)
@@ -103,18 +113,40 @@ player_s_3_walk:
 
 tiles_end:
 
+player_idle_metasprite:
+	.byte 0, 0, PLAYER_IDLE_0, %00000001
+	.byte 0, 8, PLAYER_IDLE_1, %00000001
+	.byte 8, 0, PLAYER_IDLE_2, %00000001
+	.byte 8, 8, PLAYER_IDLE_3, %00000001
+	.byte $80
+
+player_walk1_metasprite:
+	.byte 0, 0, PLAYER_IDLE_0, %00000001
+	.byte 0, 8, PLAYER_IDLE_1, %00000001
+	.byte 8, 0, PLAYER_IDLE_2, %00000001
+	.byte 8, 8, PLAYER_WALK_3, %00000001
+	.byte $80
+
+player_walk2_metasprite:
+	.byte 0, 0, PLAYER_IDLE_0, %00000001
+	.byte 0, 8, PLAYER_IDLE_1, %00000001
+	.byte 8, 0, PLAYER_WALK_2, %00000001
+	.byte 8, 8, PLAYER_IDLE_3, %00000001
+	.byte $80
+	
+
 ; Background palette (4 colors) + 3 more sub-palettes (unused)
 ; Values are NES palette indices. $0F is black.
 bg_palette:
-  .byte $30, $27, $16, $30   ; warm roman tones (universal background set to white)
-	.byte $0F, $00, $10, $20   ; BG palette 1
+  .byte $0F, $27, $16, $30   ; warm roman tones (universal background set to white)
+	.byte $0F, $0F, $10, $20   ; BG palette 1
 	.byte $0F, $06, $16, $26   ; BG palette 2
 	.byte $0F, $09, $19, $29   ; BG palette 3
 
 ; Sprite palette (same idea)
 spr_palette:
 	.byte $0F, $27, $17, $30   ; SPR palette 0
-	.byte $0F, $00, $10, $20   ; SPR palette 1
+	.byte $0F, $0F, $16, $37   ; SPR palette 1
 	.byte $0F, $06, $16, $26   ; SPR palette 2
 	.byte $0F, $09, $19, $29   ; SPR palette 3
 
@@ -279,27 +311,43 @@ no_up:
 	lda pad1
 	and #$F0              ; any D-pad pressed?
 	beq still
+	
+	; Walking - use metasprites
 	inc anim_frame
 	lda anim_frame
+	lsr                   ; divide by 8 for slower animation
+	lsr
+	lsr
 	and #$01
 	beq use_walk1
-	lda #PLAYER_TILE2
-	bne set_tile
+	
+	; Use walk2 metasprite
+	lda #<player_walk2_metasprite
+	sta metasprite_ptr_lo
+	lda #>player_walk2_metasprite
+	sta metasprite_ptr_hi
+	jmp draw_player
+	
 use_walk1:
-	lda #PLAYER_TILE1
-set_tile:
-	sta oam_shadow+1
-	jmp store_pos
+	; Use walk1 metasprite
+	lda #<player_walk1_metasprite
+	sta metasprite_ptr_lo
+	lda #>player_walk1_metasprite
+	sta metasprite_ptr_hi
+	jmp draw_player
+	
 still:
-	lda #PLAYER_TILE1
-	sta oam_shadow+1
+	; Use idle metasprite
+	lda #<player_idle_metasprite
+	sta metasprite_ptr_lo
+	lda #>player_idle_metasprite
+	sta metasprite_ptr_hi
 	lda #$00
 	sta anim_frame
-store_pos:
-	lda sprite_y
-	sta oam_shadow+0
-	lda sprite_x
-	sta oam_shadow+3
+	
+draw_player:
+	jsr draw_metasprite
+continue_main:
 
 	jmp main_loop
 
@@ -329,6 +377,50 @@ irq:
 ; -------------------------
 ; Subroutines
 ; -------------------------
+
+; draw_metasprite: draws a metasprite at sprite_x, sprite_y
+; Input: metasprite_ptr_lo/hi points to metasprite data
+draw_metasprite:
+	ldy #$00            ; OAM shadow index
+	ldx #$00            ; metasprite data index
+metasprite_loop:
+	lda (metasprite_ptr_lo), y
+	cmp #$80            ; check for end marker
+	beq metasprite_done
+	
+	; Y offset
+	clc
+	adc sprite_y
+	sta oam_shadow, x
+	iny
+	
+	; X offset  
+	lda (metasprite_ptr_lo), y
+	clc
+	adc sprite_x
+	sta oam_shadow+3, x
+	iny
+	
+	; Tile
+	lda (metasprite_ptr_lo), y
+	sta oam_shadow+1, x
+	iny
+	
+	; Attributes
+	lda (metasprite_ptr_lo), y
+	sta oam_shadow+2, x
+	iny
+	
+	; Move to next sprite slot (4 bytes per sprite)
+	txa
+	clc
+	adc #$04
+	tax
+	
+	jmp metasprite_loop
+	
+metasprite_done:
+	rts
 
 ; read_controller1: reads 8 bits from $4016 into pad1
 ; Bit order (bit0..bit7): A, B, Select, Start, Up, Down, Left, Right
