@@ -86,6 +86,21 @@ player_walk2:
 	.byte %00110000, %00110000  ; row 5
 	.byte %10010000, %10010000  ; row 6
 	.byte %01000010, %01000010  ; row 7
+
+player_s_0_idle:
+	.byte $07,$08,$10,$20,$20,$17,$0F,$0F,$00,$07,$0F,$1F,$1F,$09,$05,$05
+player_s_1_idle:
+	.byte $E0,$10,$08,$08,$88,$E8,$F0,$F0,$00,$E0,$F0,$F0,$F0,$10,$A0,$A0
+player_s_2_idle:
+	.byte $1F,$3F,$4F,$4F,$3F,$0F,$17,$21,$0B,$1C,$3B,$33,$04,$06,$0E,$1E
+player_s_3_idle:
+	.byte $F8,$FC,$F2,$F2,$FC,$F0,$D0,$08,$D0,$38,$DC,$CC,$20,$60,$E0,$F0
+
+player_s_2_walk:
+	.byte $1F,$3F,$4F,$4F,$3F,$17,$21,$1F,$0B,$1C,$3B,$33,$04,$0E,$1E,$00
+player_s_3_walk:
+	.byte $F8,$FC,$F2,$F2,$FC,$D0,$08,$F0,$D0,$38,$DC,$CC,$20,$60,$F0,$00
+
 tiles_end:
 
 ; Background palette (4 colors) + 3 more sub-palettes (unused)

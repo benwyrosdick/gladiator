@@ -144,7 +144,7 @@ The NES CPU sees a 64KB address space divided into specific regions:
 ```
 $0000-$07FF: Internal RAM (2KB)
 $0800-$0FFF: Mirror of $0000-$07FF
-$1000-$17FF: Mirror of $0000-$07FF  
+$1000-$17FF: Mirror of $0000-$07FF
 $1800-$1FFF: Mirror of $0000-$07FF
 $2000-$2007: PPU Registers
 $2008-$3FFF: Mirrors of $2000-$2007
