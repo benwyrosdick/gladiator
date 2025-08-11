@@ -1,6 +1,4 @@
 ; gladiator/src/main.s
-; Minimal NES starter (NROM-128 / mapper 0, CHR-RAM) using ca65/ld65.
-; Puts a single sprite on screen.
 ;
 ; Build (assuming cc65 suite is installed and on PATH):
 ;   ca65 src/main.s -o build/main.o
