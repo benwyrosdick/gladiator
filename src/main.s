@@ -38,6 +38,9 @@ PLAYER_IDLE_2 = $05
 PLAYER_IDLE_3 = $06
 PLAYER_WALK_2 = $07
 PLAYER_WALK_3 = $08
+WALL_TILE = $09
+FLOOR_TILE = $0A
+PILLAR_TILE = $0B
 
 ; -------------------------
 ; Zero page
@@ -109,6 +112,36 @@ player_s_2_walk:
 player_s_3_walk:
 	.byte $F8,$FC,$F2,$F2,$FC,$D0,$08,$F0,$D0,$38,$DC,$CC,$20,$60,$F0,$00
 
+wall_tile:
+	.byte %11111111, %11111111
+	.byte %10000001, %11111111
+	.byte %10111101, %11111111
+	.byte %10111101, %11111111
+	.byte %10111101, %11111111
+	.byte %10111101, %11111111
+	.byte %10000001, %11111111
+	.byte %11111111, %11111111
+
+floor_tile:
+	.byte %10101010, %01010101
+	.byte %01010101, %10101010
+	.byte %10101010, %01010101
+	.byte %01010101, %10101010
+	.byte %10101010, %01010101
+	.byte %01010101, %10101010
+	.byte %10101010, %01010101
+	.byte %01010101, %10101010
+
+pillar_tile:
+	.byte %11111111, %11111111
+	.byte %10000001, %11111111
+	.byte %10111101, %11111111
+	.byte %10100101, %11111111
+	.byte %10100101, %11111111
+	.byte %10111101, %11111111
+	.byte %10000001, %11111111
+	.byte %11111111, %11111111
+
 tiles_end:
 
 player_idle_metasprite:
@@ -147,6 +180,43 @@ spr_palette:
 	.byte $0F, $0F, $16, $37   ; SPR palette 1
 	.byte $0F, $06, $16, $26   ; SPR palette 2
 	.byte $0F, $09, $19, $29   ; SPR palette 3
+
+; Background map data (32x30 tiles)
+; Arena layout with walls, floor, and pillars
+; W = Wall, F = Floor, P = Pillar
+arena_map:
+	.byte $09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09
+	.byte $09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09
+	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
+	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
+	.byte $09,$0A,$0A,$0B,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
+	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0B,$0A,$0A,$0A,$09
+	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
+	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
+	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
+	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
+	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
+	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
+	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
+	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
+	.byte $09,$0A,$0A,$0B,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
+	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0B,$0A,$0A,$0A,$09
+	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
+	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
+	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
+	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
+	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
+	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
+	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
+	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
+	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
+	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
+	.byte $09,$0A,$0A,$0B,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
+	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0B,$0A,$0A,$0A,$09
+	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
+	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
+	.byte $09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09
+	.byte $09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09
 
 ; -------------------------
 ; Code
@@ -209,22 +279,40 @@ load_tiles:
 	cpx #(tiles_end - tiles)
 	bne load_tiles
 
-	; Fill nametable with background tile
+	; Load background map from arena_map
 	lda #$20
 	sta PPUADDR
 	lda #$00
 	sta PPUADDR
 
-	ldx #$1E              ; 30 rows
-fill_nt_row:
-	ldy #$20              ; 32 columns
-fill_nt_col:
-	lda #$00              ; bg_tile index
+	ldx #$00              ; map data index
+load_map_loop:
+	lda arena_map, x
 	sta PPUDATA
-	dey
-	bne fill_nt_col
+	inx
+	bne load_map_loop     ; first 256 bytes
+	
+	; Continue loading remaining map data
+load_map_loop2:
+	lda arena_map+256, x
+	sta PPUDATA
+	inx
+	cpx #$E0              ; 224 more bytes (total 480 = 30 rows * 16 tiles/row * 2)
+	bne load_map_loop2
+	
+	; Fill remaining tiles to complete 30x32 grid
+	lda #FLOOR_TILE
+	ldx #$E0
+fill_remaining:
+	sta PPUDATA
+	inx
+	bne fill_remaining
+	
+	ldx #$40              ; 64 more tiles
+fill_remaining2:
+	sta PPUDATA
 	dex
-	bne fill_nt_row
+	bne fill_remaining2
 
 	; Set attribute table to palette 0
 	lda #$23
