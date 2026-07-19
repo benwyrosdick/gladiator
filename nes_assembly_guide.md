@@ -1,5 +1,7 @@
 # NES Assembly Programming: Getting Started Guide
 
+General reference for NES / 6502 development. Project-specific guidance lives in `CLAUDE.md` and `README.md`; game code is in `src/main.s`.
+
 ## 6502 Processor Instructions
 
 The NES uses a modified 6502 processor. Here are all available instructions grouped by category:

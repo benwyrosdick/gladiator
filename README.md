@@ -1,19 +1,40 @@
-# Gladiator (NROM-128, CHR-RAM)
+# Gladiator
 
-This is a tiny, modern starter for homebrew NES development that will run in common emulators (Mesen, FCEUX, Nestopia UE). It:
-- Targets **Mapper 0 (NROM-128)** with **1 x 16KB PRG** and **CHR-RAM** (0 CHR banks).
+A small homebrew NES game written in 6502 assembly. Built as a learning project for NES development with the cc65 toolchain.
+
+- **Mapper 0 (NROM-128)**: 16KB PRG-ROM, CHR-RAM
+- Move a 16×16 gladiator around a simple arena with D-pad walk animation
 
 ## Requirements
-- **cc65** toolchain installed and on PATH (`ca65`, `ld65`).
-  - macOS: `brew install cc65`
-  - Linux: your package manager or build from source
+
+- **cc65** (`ca65`, `ld65`) on your PATH  
+  - macOS: `brew install cc65`  
+  - Linux: package manager or [build from source](https://cc65.github.io/)
+- An NES emulator (Mesen, FCEUX, Nestopia UE, …)
 
 ## Build
+
 ```sh
 make
 ```
-This produces `build/gladiator.nes`. Load that ROM in your emulator of choice.
+
+Produces `build/gladiator.nes`. Load that file in your emulator.
+
+```sh
+make clean   # remove build/
+```
+
+## Project layout
+
+```
+src/main.s              Game code, tiles, map, palettes
+nrom128.cfg             Linker config (NROM-128 memory map)
+Makefile                Assemble, link, write iNES header
+nes_assembly_guide.md   General NES / 6502 reference
+CLAUDE.md               Notes for AI coding agents
+```
 
 ## Notes
-- The iNES header declares 1 PRG bank and 0 CHR banks (CHR-RAM). Most emulators handle this fine.
-- For banked projects, switch to NROM-256 or mappers like MMC1/MMC3 later.
+
+- The iNES header is 1 PRG bank, 0 CHR banks (CHR-RAM). Common emulators handle this fine.
+- For larger games you would step up to NROM-256 or mappers such as MMC1/MMC3.

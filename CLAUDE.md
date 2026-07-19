@@ -1,79 +1,77 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for AI agents working on this repository.
 
-## Project Overview
+## Project
 
-This is a NES (Nintendo Entertainment System) game written in 6502 assembly using the cc65 toolchain. The game targets the NROM-128 mapper (Mapper 0) with CHR-RAM for graphics.
+Homebrew NES game in 6502 assembly (cc65). Learning project for NES development.
 
-## Build Commands
+- **Mapper**: NROM-128 (Mapper 0) — 16KB PRG, CHR-RAM
+- **Toolchain**: ca65 / ld65
+- **Output**: `build/gladiator.nes`
+
+## Commands
 
 ```bash
-# Build the ROM
-make
-
-# Clean and rebuild
+make              # build ROM
 make clean && make
-
-# Test after changes - builds the .nes ROM file
-make
 ```
 
-The build process creates `build/gladiator.nes` which can be run in NES emulators (Mesen, FCEUX, Nestopia UE).
+Run the ROM in Mesen, FCEUX, or Nestopia UE.
 
-## Architecture
+## Layout
 
-### Memory Map
-- **Zero Page ($00-$FF)**: Fast-access variables (sprite positions, controller state, animation frame, metasprite pointers)
-- **OAM Shadow ($0200-$02FF)**: Sprite buffer for DMA transfer
-- **ROM ($C000-$FFFF)**: Program code and data in a single 16KB bank
+| Path | Role |
+|------|------|
+| `src/main.s` | All game code, tiles, palettes, map, logic |
+| `nrom128.cfg` | Linker memory map |
+| `Makefile` | Build: assemble → link → iNES header → `.nes` |
+| `nes_assembly_guide.md` | NES/6502 reference (not project-specific) |
 
-### File Structure
-- `src/main.s`: Main game code containing all game logic, graphics data, and system initialization
-- `nrom128.cfg`: Linker configuration defining memory segments
-- `Makefile`: Build automation using ca65/ld65
+## Memory
 
-### Graphics System
-The game uses CHR-RAM (not CHR-ROM), loading tile data during initialization:
-- Tiles are defined as raw bytes in the RODATA segment
-- Metasprites use a format: Y-offset, X-offset, tile-index, attributes, with $80 as end marker
-- OAM DMA is performed during NMI for sprite rendering
+- **Zero page**: `frame_flag`, `pad1`, `sprite_x/y`, `anim_frame`, metasprite pointer
+- **OAM shadow `$0200`**: 256-byte sprite buffer; NMI does DMA via `$4014`
+- **PRG `$C000–$FFFF`**: code + RODATA (single 16KB bank)
 
-### Current Implementation
-- **Player sprite**: 16×16 pixel metasprite composed of 4 tiles
-- **Animation states**: idle, walk1, walk2 metasprites
-- **Controller handling**: D-pad movement with frame-based updates
-- **Palettes**: Roman-themed color scheme
+## What exists today
 
-### Key Constants
-Tile indices are defined at the top of main.s:
-- `BG_TILE_IDX`: Background tile
-- `PLAYER_IDLE_0-3`: Idle animation tiles  
-- `PLAYER_WALK_2-3`: Walking animation tiles
+- 16×16 player metasprite (4 hardware sprites), idle + two walk frames
+- D-pad movement; walk anim advances every 8 frames while moving
+- Arena background (walls, floor, pillars) loaded from `arena_map`
+- CHR-RAM tiles uploaded at reset; Roman-ish palettes
 
-## Development Notes
+### Tile indices (`src/main.s`)
 
-### Adding New Features
-When modifying graphics:
-1. Add tile data in the RODATA segment between `tiles:` and `tiles_end:`
-2. Update tile index constants
-3. For metasprites, follow the existing format with $80 terminator
+Order in the `tiles:` … `tiles_end:` blob must match these constants:
 
-### Testing Changes
-After any code modifications:
-1. Run `make clean && make` to ensure a fresh build
-2. Test in an emulator to verify functionality
-3. Check for sprite flickering or incorrect tile indices
+- `BG_TILE_IDX`, `PLAYER_IDLE_0`–`3`, `PLAYER_WALK_2`–`3`
+- `WALL_TILE`, `FLOOR_TILE`, `PILLAR_TILE`
 
-### Common Tasks
-- **Modify player movement speed**: Adjust increment/decrement values in D-pad handling (lines ~290-310)
-- **Change animation speed**: Modify the shift count in walking animation logic (currently divides by 8)
-- **Add new metasprites**: Define in RODATA after existing metasprite definitions, create index constants
+### Metasprite format
 
-## Reference Documentation
+Each entry is 4 bytes: **Y offset, X offset, tile, attributes**. Terminator: `$80`.
 
-The repository includes `nes_assembly_guide.md` with comprehensive NES programming information including:
-- Complete 6502 instruction reference
-- PPU register descriptions
-- Controller input patterns
-- Graphics programming techniques
+## Conventions when editing
+
+**Graphics**
+
+1. Append tile bytes inside `tiles:` … `tiles_end:`
+2. Update tile index constants (and any hardcoded map bytes)
+3. New metasprites: same 4-byte format + `$80` end marker
+
+**Gameplay knobs** (search symbols, not line numbers)
+
+- Movement: `inc`/`dec` of `sprite_x` / `sprite_y` on D-pad bits
+- Anim rate: three `lsr` on `anim_frame` (÷8)
+- Controller bits in `pad1` after `read_controller1`: bit7 Right, bit6 Left, bit5 Down, bit4 Up, bit3 Start, bit2 Select, bit1 B, bit0 A
+
+**Build discipline**
+
+- Prefer `make clean && make` after structural changes
+- Keep OAM shadow at `$0200` (BSS must stay first so DMA page is `$02`)
+- Do not break the NMI → `frame_flag` → main loop frame sync
+
+## Out of scope / keep simple
+
+Single-file codebase is intentional. Split files only if the project grows past a toy. Prefer NROM/CHR-RAM patterns already in use over introducing mappers early.

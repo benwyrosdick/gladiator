@@ -1,18 +1,5 @@
-; gladiator/src/main.s
-;
-; Build (assuming cc65 suite is installed and on PATH):
-;   ca65 src/main.s -o build/main.o
-;   ld65 -C nrom128.cfg build/main.o -o build/gladiator.prg
-;   # Create iNES header: "NES\x1A", 1 PRG bank (16KB), 0 CHR, rest zeros
-;   python - <<'PY'
-;   import sys
-;   hdr = bytearray(b'NES\\x1A')
-;   hdr += bytes([1, 0, 0, 0]) + bytes(8)
-;   open('build/header.bin','wb').write(hdr)
-;   PY
-;   cat build/header.bin build/gladiator.prg > build/gladiator.nes
-;
-; Then load build/gladiator.nes in an emulator (Mesen, FCEUX, etc).
+; Gladiator — NROM-128, CHR-RAM
+; Build: make  →  build/gladiator.nes
 
 	.setcpu "6502"
 	.feature c_comments
@@ -28,45 +15,43 @@ OAMDATA   = $2004
 PPUADDR   = $2006
 PPUDATA   = $2007
 
-; Tile indices (based on order in CHR-RAM)
-BG_TILE_IDX = $00
-PLAYER_TILE1 = $01
-PLAYER_TILE2 = $02
-PLAYER_IDLE_0 = $03
-PLAYER_IDLE_1 = $04
-PLAYER_IDLE_2 = $05
-PLAYER_IDLE_3 = $06
-PLAYER_WALK_2 = $07
-PLAYER_WALK_3 = $08
-WALL_TILE = $09
-FLOOR_TILE = $0A
-PILLAR_TILE = $0B
+; Tile indices (order of data in the tiles: blob)
+BG_TILE_IDX   = $00
+PLAYER_IDLE_0 = $01
+PLAYER_IDLE_1 = $02
+PLAYER_IDLE_2 = $03
+PLAYER_IDLE_3 = $04
+PLAYER_WALK_2 = $05
+PLAYER_WALK_3 = $06
+WALL_TILE     = $07
+FLOOR_TILE    = $08
+PILLAR_TILE   = $09
 
 ; -------------------------
 ; Zero page
 ; -------------------------
 	.segment "ZEROPAGE"
-temp:             .res 1
-frame_flag:       .res 1   ; set to 1 each NMI to signal a new frame
-pad1:             .res 1   ; controller 1 current state
-sprite_x:         .res 1
-sprite_y:         .res 1
-anim_frame:       .res 1   ; walking animation toggle
-metasprite_ptr_lo: .res 1   ; pointer to current metasprite data
+temp:              .res 1
+frame_flag:        .res 1   ; set to 1 each NMI (new frame)
+pad1:              .res 1   ; controller 1 state
+sprite_x:          .res 1
+sprite_y:          .res 1
+anim_frame:        .res 1   ; walking animation counter
+metasprite_ptr_lo: .res 1
 metasprite_ptr_hi: .res 1
 
 ; -------------------------
-; Work RAM (OAM shadow at $0200 page for DMA)
+; Work RAM (OAM shadow at $0200 for $4014 DMA)
 ; -------------------------
 	.segment "BSS"
-oam_shadow:        .res 256  ; must start at $0200 for $4014 DMA page = $02
+oam_shadow: .res 256        ; must be first BSS so address is $0200
 
 ; -------------------------
-; Read-only data (sprite tile and palette)
+; Read-only data
 ; -------------------------
 	.segment "RODATA"
 
-; Tiles: background brick and two human walk frames
+; CHR tiles uploaded to CHR-RAM at $0000 (16 bytes each: 8 plane0 + 8 plane1)
 tiles:
 bg_tile:
 	.byte %11111111, %11111111
@@ -77,26 +62,6 @@ bg_tile:
 	.byte %00000100, %00000000
 	.byte %00000000, %00000000
 	.byte %00000000, %00000000
-
-player_walk1:
-	.byte %00110000, %00110000  ; row 0
-	.byte %00110000, %00110000  ; row 1
-	.byte %01001000, %01001000  ; row 2
-	.byte %00000000, %00000000  ; row 3
-	.byte %00110000, %00110000  ; row 4
-	.byte %00110000, %00110000  ; row 5
-	.byte %01111000, %01111000  ; row 6
-	.byte %11111100, %11111100  ; row 7
-
-player_walk2:
-	.byte %00110000, %00110000  ; row 0
-	.byte %00110000, %00110000  ; row 1
-	.byte %01111000, %01111000  ; row 2
-	.byte %01111000, %01111000  ; row 3
-	.byte %00110000, %00110000  ; row 4
-	.byte %00110000, %00110000  ; row 5
-	.byte %10010000, %10010000  ; row 6
-	.byte %01000010, %01000010  ; row 7
 
 player_s_0_idle:
 	.byte $07,$08,$10,$20,$20,$17,$0F,$0F,$00,$07,$0F,$1F,$1F,$09,$05,$05
@@ -141,9 +106,9 @@ pillar_tile:
 	.byte %10111101, %11111111
 	.byte %10000001, %11111111
 	.byte %11111111, %11111111
-
 tiles_end:
 
+; Metasprites: Y-off, X-off, tile, attr  …  $80 terminator
 player_idle_metasprite:
 	.byte 0, 0, PLAYER_IDLE_0, %00000001
 	.byte 0, 8, PLAYER_IDLE_1, %00000001
@@ -164,59 +129,101 @@ player_walk2_metasprite:
 	.byte 8, 0, PLAYER_WALK_2, %00000001
 	.byte 8, 8, PLAYER_IDLE_3, %00000001
 	.byte $80
-	
 
-; Background palette (4 colors) + 3 more sub-palettes (unused)
-; Values are NES palette indices. $0F is black.
+; NES palette indices ($0F = black)
 bg_palette:
-  .byte $0F, $27, $16, $30   ; warm roman tones (universal background set to white)
-	.byte $0F, $0F, $10, $20   ; BG palette 1
-	.byte $0F, $06, $16, $26   ; BG palette 2
-	.byte $0F, $09, $19, $29   ; BG palette 3
+	.byte $0F, $27, $16, $30   ; warm roman tones
+	.byte $0F, $0F, $10, $20
+	.byte $0F, $06, $16, $26
+	.byte $0F, $09, $19, $29
 
-; Sprite palette (same idea)
 spr_palette:
-	.byte $0F, $27, $17, $30   ; SPR palette 0
-	.byte $0F, $0F, $16, $37   ; SPR palette 1
-	.byte $0F, $06, $16, $26   ; SPR palette 2
-	.byte $0F, $09, $19, $29   ; SPR palette 3
+	.byte $0F, $27, $17, $30
+	.byte $0F, $0F, $16, $37
+	.byte $0F, $06, $16, $26
+	.byte $0F, $09, $19, $29
 
-; Background map data (32x30 tiles)
-; Arena layout with walls, floor, and pillars
-; W = Wall, F = Floor, P = Pillar
+; Arena nametable (32×30 tiles). WALL / FLOOR / PILLAR.
 arena_map:
-	.byte $09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09
-	.byte $09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09
-	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
-	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
-	.byte $09,$0A,$0A,$0B,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
-	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0B,$0A,$0A,$0A,$09
-	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
-	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
-	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
-	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
-	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
-	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
-	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
-	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
-	.byte $09,$0A,$0A,$0B,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
-	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0B,$0A,$0A,$0A,$09
-	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
-	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
-	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
-	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
-	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
-	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
-	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
-	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
-	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
-	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
-	.byte $09,$0A,$0A,$0B,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
-	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0B,$0A,$0A,$0A,$09
-	.byte $09,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A
-	.byte $0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$0A,$09
-	.byte $09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09
-	.byte $09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09,$09
+	.byte WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE
+	.byte WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE
+	.byte WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE
+	.byte WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE
+
+	.byte WALL_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,WALL_TILE
+
+	.byte WALL_TILE,FLOOR_TILE,FLOOR_TILE,PILLAR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,PILLAR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,WALL_TILE
+
+	.byte WALL_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,WALL_TILE
+
+	.byte WALL_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,WALL_TILE
+
+	.byte WALL_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,WALL_TILE
+
+	.byte WALL_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,WALL_TILE
+
+	.byte WALL_TILE,FLOOR_TILE,FLOOR_TILE,PILLAR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,PILLAR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,WALL_TILE
+
+	.byte WALL_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,WALL_TILE
+
+	.byte WALL_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,WALL_TILE
+
+	.byte WALL_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,WALL_TILE
+
+	.byte WALL_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,WALL_TILE
+
+	.byte WALL_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,WALL_TILE
+
+	.byte WALL_TILE,FLOOR_TILE,FLOOR_TILE,PILLAR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,PILLAR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,WALL_TILE
+
+	.byte WALL_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE
+	.byte FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,FLOOR_TILE,WALL_TILE
+
+	.byte WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE
+	.byte WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE
+	.byte WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE
+	.byte WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE,WALL_TILE
 
 ; -------------------------
 ; Code
@@ -234,11 +241,11 @@ reset:
 	sta PPUCTRL
 	sta PPUMASK
 
-	; Wait for vblank twice (PPUSTATUS bit7)
+	; Wait for vblank twice (PPU warm-up)
 	jsr wait_vblank
 	jsr wait_vblank
 
-	; Load background palettes at $3F00
+	; Background palettes at $3F00
 	lda #$3F
 	sta PPUADDR
 	lda #$00
@@ -252,7 +259,7 @@ load_bg_pal:
 	cpx #$10
 	bne load_bg_pal
 
-	; Load sprite palettes at $3F10
+	; Sprite palettes at $3F10
 	lda #$3F
 	sta PPUADDR
 	lda #$10
@@ -279,42 +286,40 @@ load_tiles:
 	cpx #(tiles_end - tiles)
 	bne load_tiles
 
-	; Load background map from arena_map
+	; Nametable at $2000 from arena_map (480 tiles), then pad to 960
 	lda #$20
 	sta PPUADDR
 	lda #$00
 	sta PPUADDR
 
-	ldx #$00              ; map data index
+	ldx #$00
 load_map_loop:
 	lda arena_map, x
 	sta PPUDATA
 	inx
-	bne load_map_loop     ; first 256 bytes
-	
-	; Continue loading remaining map data
+	bne load_map_loop           ; first 256 bytes
+
 load_map_loop2:
 	lda arena_map+256, x
 	sta PPUDATA
 	inx
-	cpx #$E0              ; 224 more bytes (total 480 = 30 rows * 16 tiles/row * 2)
+	cpx #$E0                    ; 224 more → 480 total (15×32)
 	bne load_map_loop2
-	
-	; Fill remaining tiles to complete 30x32 grid
+
 	lda #FLOOR_TILE
 	ldx #$E0
 fill_remaining:
 	sta PPUDATA
 	inx
 	bne fill_remaining
-	
-	ldx #$40              ; 64 more tiles
+
+	ldx #$40                    ; remaining tiles to fill 30×32
 fill_remaining2:
 	sta PPUDATA
 	dex
 	bne fill_remaining2
 
-	; Set attribute table to palette 0
+	; Attribute table → palette 0
 	lda #$23
 	sta PPUADDR
 	lda #$C0
@@ -327,40 +332,32 @@ fill_attr:
 	cpx #$40
 	bne fill_attr
 
-        ; Initialize OAM shadow: hide all sprites (Y=$FF at each entry)
+	; Hide all sprites (Y = $FF)
 	ldx #$00
 	lda #$FF
 hide_all_sprites:
-	sta oam_shadow, x    ; Y
+	sta oam_shadow, x
 	inx
-	inx                  ; skip tile
-	inx                  ; skip attr
-	inx                  ; skip X (advance 4 bytes per sprite)
-	bne hide_all_sprites ; 64 sprites -> wraps at 256
+	inx
+	inx
+	inx
+	bne hide_all_sprites
 
-	; Initialize first sprite position and data
+	; Player start position
 	lda #120
 	sta sprite_x
 	lda #100
 	sta sprite_y
 	lda #$00
 	sta anim_frame
-	lda sprite_y
-	sta oam_shadow+0     ; Y
-	lda #PLAYER_TILE1
-	sta oam_shadow+1     ; tile index
-	lda #%00000000
-	sta oam_shadow+2     ; attributes
-	lda sprite_x
-	sta oam_shadow+3     ; X
 
-	; Enable NMI and show BG+sprites
-	lda #%10000000       ; enable NMI on vblank
+	; Enable NMI; show BG + sprites
+	lda #%10000000
 	sta PPUCTRL
-	lda #%00011110       ; show bg & sprites
+	lda #%00011110
 	sta PPUMASK
 
-; Main loop: wait for vblank, poll controller, update sprite, NMI does DMA
+; Main loop: wait for NMI, poll pad, update sprite
 main_loop:
 wait_frame:
 	lda frame_flag
@@ -368,150 +365,131 @@ wait_frame:
 	lda #$00
 	sta frame_flag
 
-	; Read controller 1
 	jsr read_controller1
 
-	; Update sprite position based on D-Pad
+	; D-pad movement (pad1: R L D U …)
 	lda pad1
-	and #$80              ; Right
+	and #$80                    ; Right
 	beq no_right
 	inc sprite_x
 no_right:
 	lda pad1
-	and #$40              ; Left
+	and #$40                    ; Left
 	beq no_left
 	dec sprite_x
 no_left:
 	lda pad1
-	and #$20              ; Down
+	and #$20                    ; Down
 	beq no_down
 	inc sprite_y
 no_down:
 	lda pad1
-	and #$10              ; Up
+	and #$10                    ; Up
 	beq no_up
 	dec sprite_y
 no_up:
 
-	; handle walking animation and write to OAM shadow
+	; Walking animation while any D-pad held
 	lda pad1
-	and #$F0              ; any D-pad pressed?
+	and #$F0
 	beq still
-	
-	; Walking - use metasprites
+
 	inc anim_frame
 	lda anim_frame
-	lsr                   ; divide by 8 for slower animation
+	lsr                         ; ÷8 for slower anim
 	lsr
 	lsr
 	and #$01
 	beq use_walk1
-	
-	; Use walk2 metasprite
+
 	lda #<player_walk2_metasprite
 	sta metasprite_ptr_lo
 	lda #>player_walk2_metasprite
 	sta metasprite_ptr_hi
 	jmp draw_player
-	
+
 use_walk1:
-	; Use walk1 metasprite
 	lda #<player_walk1_metasprite
 	sta metasprite_ptr_lo
 	lda #>player_walk1_metasprite
 	sta metasprite_ptr_hi
 	jmp draw_player
-	
+
 still:
-	; Use idle metasprite
 	lda #<player_idle_metasprite
 	sta metasprite_ptr_lo
 	lda #>player_idle_metasprite
 	sta metasprite_ptr_hi
 	lda #$00
 	sta anim_frame
-	
+
 draw_player:
 	jsr draw_metasprite
-continue_main:
-
 	jmp main_loop
 
 wait_vblank:
-	; Wait for bit 7 of PPUSTATUS to go 1 (vblank)
 	bit PPUSTATUS
 	bpl wait_vblank
 	rts
 
 nmi:
-	; Perform OAM DMA during vblank
+	; OAM DMA during vblank
 	lda #$00
-	sta $2003             ; OAMADDR = 0
+	sta OAMADDR
 	lda #$02
-	sta $4014             ; start DMA from $0200
+	sta $4014                   ; DMA from $0200
 	lda #$01
-	sta frame_flag        ; signal main loop
+	sta frame_flag
 	rti
 
 irq:
 	rti
 
 ; -------------------------
-; Vectors
-; -------------------------
-
-; -------------------------
 ; Subroutines
 ; -------------------------
 
-; draw_metasprite: draws a metasprite at sprite_x, sprite_y
-; Input: metasprite_ptr_lo/hi points to metasprite data
+; Draw metasprite at sprite_x, sprite_y.
+; metasprite_ptr_lo/hi → data (Y-off, X-off, tile, attr)*  $80
 draw_metasprite:
-	ldy #$00            ; OAM shadow index
-	ldx #$00            ; metasprite data index
+	ldy #$00                    ; index into metasprite data
+	ldx #$00                    ; index into OAM shadow
 metasprite_loop:
 	lda (metasprite_ptr_lo), y
-	cmp #$80            ; check for end marker
+	cmp #$80
 	beq metasprite_done
-	
-	; Y offset
+
 	clc
 	adc sprite_y
-	sta oam_shadow, x
+	sta oam_shadow, x           ; Y
 	iny
-	
-	; X offset  
+
 	lda (metasprite_ptr_lo), y
 	clc
 	adc sprite_x
-	sta oam_shadow+3, x
+	sta oam_shadow+3, x         ; X
 	iny
-	
-	; Tile
+
 	lda (metasprite_ptr_lo), y
-	sta oam_shadow+1, x
+	sta oam_shadow+1, x         ; tile
 	iny
-	
-	; Attributes
+
 	lda (metasprite_ptr_lo), y
-	sta oam_shadow+2, x
+	sta oam_shadow+2, x         ; attributes
 	iny
-	
-	; Move to next sprite slot (4 bytes per sprite)
+
 	txa
 	clc
 	adc #$04
 	tax
-	
 	jmp metasprite_loop
-	
+
 metasprite_done:
 	rts
 
-; read_controller1: reads 8 bits from $4016 into pad1
-; Bit order (bit0..bit7): A, B, Select, Start, Up, Down, Left, Right
+; Read controller 1 into pad1.
+; After 8 ROL bits: bit0=A … bit7=Right
 read_controller1:
-	; strobe controllers
 	lda #$01
 	sta $4016
 	lda #$00
@@ -523,7 +501,7 @@ read_controller1:
 rc1_loop:
 	lda $4016
 	and #$01
-	cmp #$01              ; set carry if pressed
+	cmp #$01                    ; C = pressed
 	rol pad1
 	dex
 	bne rc1_loop

@@ -1,39 +1,31 @@
-# gladiator/Makefile
-# Use one shell per recipe so heredocs work
-.ONESHELL:
-# Requires cc65 toolchain installed: ca65, ld65
-# Build: make
-# Clean: make clean
+# Gladiator NES — requires cc65 (ca65, ld65) and python3
+# make / make clean
 
-NAME = gladiator
-
+NAME  = gladiator
 CC65 ?= ca65
 LD65 ?= ld65
 
-SRC = src/main.s
+SRC   = src/main.s
 BUILD = build
-PRG = $(BUILD)/$(NAME).prg
-NES = $(BUILD)/$(NAME).nes
-OBJ = $(BUILD)/main.o
-CFG = nrom128.cfg
-HDR = $(BUILD)/header.bin
+OBJ   = $(BUILD)/main.o
+PRG   = $(BUILD)/$(NAME).prg
+NES   = $(BUILD)/$(NAME).nes
+CFG   = nrom128.cfg
+HDR   = $(BUILD)/header.bin
 
 all: $(NES)
 
 $(OBJ): $(SRC)
-	@mkdir -p $(BUILD)
+	mkdir -p $(BUILD)
 	$(CC65) $(SRC) -o $(OBJ)
 
 $(PRG): $(OBJ) $(CFG)
 	$(LD65) -C $(CFG) $(OBJ) -o $(PRG)
 
+# iNES: "NES\x1A", 1 PRG bank (16KB), 0 CHR (CHR-RAM), mapper 0
 $(HDR):
-	@mkdir -p $(BUILD)
-	python3 - <<-'PY'
-	hdr = bytearray(b'NES\x1A')
-	hdr += bytes([1, 0, 0, 0]) + bytes(8)  # 1 PRG bank, 0 CHR, mapper 0
-	open('$(HDR)','wb').write(hdr)
-	PY
+	mkdir -p $(BUILD)
+	python3 -c "open('$(HDR)','wb').write(b'NES\x1a'+bytes([1,0,0,0])+bytes(8))"
 
 $(NES): $(PRG) $(HDR)
 	cat $(HDR) $(PRG) > $(NES)
