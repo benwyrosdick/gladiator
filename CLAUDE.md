@@ -37,8 +37,10 @@ Run the ROM in Mesen, FCEUX, or Nestopia UE.
 ## What exists today
 
 - 16×16 player metasprite (4 hardware sprites), idle + two walk frames
-- D-pad movement; walk anim advances every 8 frames while moving
-- Arena background (walls, floor, pillars) loaded from `arena_map`
+- D-pad movement with axis-separated collision (screen edges + solid tiles)
+- Solid tiles: `WALL_TILE`, `PILLAR_TILE` (see `player_hits_solid` / `is_solid_at`)
+- Walk anim only when position actually changes; rate ÷8 frames
+- Arena background (walls, floor, pillars) loaded from `arena_map` (16×32)
 - CHR-RAM tiles uploaded at reset; Roman-ish palettes
 
 ### Tile indices (`src/main.s`)

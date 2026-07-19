@@ -27,15 +27,28 @@ WALL_TILE     = $07
 FLOOR_TILE    = $08
 PILLAR_TILE   = $09
 
+; Player is 16×16; screen is 256×240
+PLAYER_W      = 16
+PLAYER_H      = 16
+SCREEN_MAX_X  = 256 - PLAYER_W   ; 240
+SCREEN_MAX_Y  = 240 - PLAYER_H   ; 224
+MAP_W         = 32
+MAP_H         = 16               ; rows in arena_map
+
 ; -------------------------
 ; Zero page
 ; -------------------------
 	.segment "ZEROPAGE"
 temp:              .res 1
+temp_hi:           .res 1
 frame_flag:        .res 1   ; set to 1 each NMI (new frame)
 pad1:              .res 1   ; controller 1 state
 sprite_x:          .res 1
 sprite_y:          .res 1
+old_x:             .res 1   ; position before move (collision)
+old_y:             .res 1
+check_x:           .res 1   ; pixel sample for tile test
+check_y:           .res 1
 anim_frame:        .res 1   ; walking animation counter
 metasprite_ptr_lo: .res 1
 metasprite_ptr_hi: .res 1
@@ -286,7 +299,7 @@ load_tiles:
 	cpx #(tiles_end - tiles)
 	bne load_tiles
 
-	; Nametable at $2000 from arena_map (480 tiles), then pad to 960
+	; Nametable at $2000: full arena_map (16×32 = 512), pad rest with floor
 	lda #$20
 	sta PPUADDR
 	lda #$00
@@ -303,17 +316,16 @@ load_map_loop2:
 	lda arena_map+256, x
 	sta PPUDATA
 	inx
-	cpx #$E0                    ; 224 more → 480 total (15×32)
-	bne load_map_loop2
+	bne load_map_loop2          ; second 256 → 512 total
 
 	lda #FLOOR_TILE
-	ldx #$E0
+	ldx #$00
 fill_remaining:
 	sta PPUDATA
 	inx
-	bne fill_remaining
+	bne fill_remaining          ; +256 → 768
 
-	ldx #$40                    ; remaining tiles to fill 30×32
+	ldx #192                    ; +192 → 960 (30×32)
 fill_remaining2:
 	sta PPUDATA
 	dex
@@ -367,33 +379,65 @@ wait_frame:
 
 	jsr read_controller1
 
-	; D-pad movement (pad1: R L D U …)
+	; Save position for collision rollback
+	lda sprite_x
+	sta old_x
+	lda sprite_y
+	sta old_y
+
+	; --- X axis: move, clamp to screen, revert if solid ---
 	lda pad1
 	and #$80                    ; Right
 	beq no_right
+	lda sprite_x
+	cmp #SCREEN_MAX_X
+	bcs no_right
 	inc sprite_x
 no_right:
 	lda pad1
 	and #$40                    ; Left
 	beq no_left
+	lda sprite_x
+	beq no_left                 ; already at left edge
 	dec sprite_x
 no_left:
+	jsr player_hits_solid
+	bcc x_ok
+	lda old_x
+	sta sprite_x
+x_ok:
+
+	; --- Y axis: move, clamp to screen, revert if solid ---
 	lda pad1
 	and #$20                    ; Down
 	beq no_down
+	lda sprite_y
+	cmp #SCREEN_MAX_Y
+	bcs no_down
 	inc sprite_y
 no_down:
 	lda pad1
 	and #$10                    ; Up
 	beq no_up
+	lda sprite_y
+	beq no_up                   ; already at top edge
 	dec sprite_y
 no_up:
+	jsr player_hits_solid
+	bcc y_ok
+	lda old_y
+	sta sprite_y
+y_ok:
 
-	; Walking animation while any D-pad held
-	lda pad1
-	and #$F0
+	; Walking animation only if we actually moved
+	lda sprite_x
+	cmp old_x
+	bne is_moving
+	lda sprite_y
+	cmp old_y
 	beq still
 
+is_moving:
 	inc anim_frame
 	lda anim_frame
 	lsr                         ; ÷8 for slower anim
@@ -448,6 +492,101 @@ irq:
 ; -------------------------
 ; Subroutines
 ; -------------------------
+
+; player_hits_solid: C=1 if any corner of the 16×16 box is on a solid tile
+player_hits_solid:
+	; top-left
+	lda sprite_x
+	sta check_x
+	lda sprite_y
+	sta check_y
+	jsr is_solid_at
+	bcs @solid
+
+	; top-right (x + 15)
+	lda sprite_x
+	clc
+	adc #PLAYER_W - 1
+	sta check_x
+	jsr is_solid_at
+	bcs @solid
+
+	; bottom-left (y + 15)
+	lda sprite_x
+	sta check_x
+	lda sprite_y
+	clc
+	adc #PLAYER_H - 1
+	sta check_y
+	jsr is_solid_at
+	bcs @solid
+
+	; bottom-right
+	lda sprite_x
+	clc
+	adc #PLAYER_W - 1
+	sta check_x
+	jsr is_solid_at
+	bcs @solid
+
+	clc
+	rts
+@solid:
+	sec
+	rts
+
+; is_solid_at: sample check_x/check_y against arena_map
+; C=1 solid (wall, pillar, or outside map)
+is_solid_at:
+	; tile_y = check_y / 8
+	lda check_y
+	lsr
+	lsr
+	lsr
+	cmp #MAP_H
+	bcs @solid                  ; below arena map → solid
+
+	; index = tile_y * 32  (16-bit in temp_hi:temp)
+	sta temp
+	lda #0
+	sta temp_hi
+	ldx #5                      ; << 5
+@shift:
+	asl temp
+	rol temp_hi
+	dex
+	bne @shift
+
+	; index += tile_x (check_x / 8)
+	lda check_x
+	lsr
+	lsr
+	lsr
+	clc
+	adc temp
+	sta temp
+	lda temp_hi
+	adc #0
+	sta temp_hi
+
+	; load tile: arena_map[index]
+	ldy temp
+	lda temp_hi
+	bne @hi_page
+	lda arena_map, y
+	jmp @got
+@hi_page:
+	lda arena_map+256, y
+@got:
+	cmp #WALL_TILE
+	beq @solid
+	cmp #PILLAR_TILE
+	beq @solid
+	clc
+	rts
+@solid:
+	sec
+	rts
 
 ; Draw metasprite at sprite_x, sprite_y.
 ; metasprite_ptr_lo/hi → data (Y-off, X-off, tile, attr)*  $80
