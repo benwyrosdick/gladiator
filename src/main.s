@@ -1513,7 +1513,7 @@ draw_play_sprites:
 	lda vel_x
 	beq @idle_r
 @walk_r:
-	inc anim_frame
+	jsr advance_walk_anim
 	lda anim_frame
 	lsr
 	lsr
@@ -1541,7 +1541,7 @@ draw_play_sprites:
 	lda vel_x
 	beq @idle_l
 @walk_l:
-	inc anim_frame
+	jsr advance_walk_anim
 	lda anim_frame
 	lsr
 	lsr
@@ -1571,6 +1571,16 @@ draw_play_sprites:
 	lda has_package
 	bne @done
 	jsr draw_world_package
+@done:
+	rts
+
+; Advance walk cycle; 2× when holding B (run)
+advance_walk_anim:
+	inc anim_frame
+	lda pad1
+	and #BTN_B
+	beq @done
+	inc anim_frame
 @done:
 	rts
 
