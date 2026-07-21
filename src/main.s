@@ -45,18 +45,15 @@ T_GROUND_TOP  = $07
 T_GROUND_FILL = $08
 T_BRICK       = $09
 T_PLATFORM    = $0A
-T_BOX         = $0B
-T_BOX_TL      = $0C
-T_BOX_TR      = $0D
-T_BOX_BL      = $0E
-T_BOX_BR      = $0F
-T_TRUCK0      = $10
-T_TRUCK1      = $11
-T_TRUCK2      = $12
-T_TRUCK3      = $13
-T_TRUCK4      = $14
-T_TRUCK5      = $15
-T_FONT        = $16
+T_BOX         = $0B          ; small package sprite (in-level)
+T_BOX0        = $0C          ; title flat box 6×3 (tiles $0C–$1D)
+T_TRUCK0      = $1E
+T_TRUCK1      = $1F
+T_TRUCK2      = $20
+T_TRUCK3      = $21
+T_TRUCK4      = $22
+T_TRUCK5      = $23
+T_FONT        = $24
 ; font: 0=space, 1=A … 26=Z, 27=!
 
 PLAYER_IDLE_0 = T_PLAYER0
@@ -72,7 +69,8 @@ GRAVITY      = 1
 ; Full hold peak ≈ 9+8+…+1 = 45 px (~3× old 15 px from JUMP_V=-5)
 JUMP_V       = $F7          ; -9 signed (max jump impulse)
 MAX_FALL     = 6
-MOVE_SPEED   = 2
+WALK_SPEED   = 2
+RUN_SPEED    = 4              ; hold B to run
 CAMERA_OFF   = 96
 LEVEL_W_PX_L = $00          ; level width 512 = $0200
 LEVEL_W_PX_H = $02
@@ -169,21 +167,36 @@ player_s_3_walk:
 	.byte $FF,$81,$BD,$BD,$FF,$DB,$DB,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
 ; $0A platform — full 8×8 solid ledge (white top, blue body; always visible on black sky)
 	.byte $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF
-; $0B box (sprite)
+; $0B small package sprite (front of box)
 	.byte $FF,$81,$A5,$81,$BD,$99,$81,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
-; $0C-$0F title box 2×2 (cardboard package)
-	.byte $0F,$10,$20,$20,$27,$20,$10,$0F,$0F,$1F,$3F,$3F,$3F,$3F,$1F,$0F
-	.byte $F0,$08,$04,$04,$E4,$04,$08,$F0,$F0,$F8,$FC,$FC,$FC,$FC,$F8,$F0
-	.byte $0F,$10,$27,$22,$21,$20,$10,$0F,$0F,$1F,$3F,$3F,$3F,$3F,$1F,$0F
-	.byte $F0,$08,$E4,$44,$84,$04,$08,$F0,$F0,$F8,$FC,$FC,$FC,$FC,$F8,$F0
-; $10-$15 truck
+; $0C–$1D title flat shipping box (6×3 tiles) — front view
+; 0=black outline/icons  1=light panel+label  2=cardboard  3=red tape/border
+	.byte $00,$00,$3F,$3F,$3F,$3F,$3F,$3F,$00,$00,$00,$00,$00,$00,$00,$00  ; 0
+	.byte $00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$F8,$F8,$88,$D8,$D8,$F8  ; 1
+	.byte $00,$00,$C0,$C0,$C0,$C0,$C0,$C0,$00,$00,$1F,$1F,$1F,$1F,$1F,$1F  ; 2
+	.byte $00,$00,$00,$FF,$FF,$E0,$FF,$E0,$00,$00,$FF,$FF,$D5,$C0,$80,$C0  ; 3
+	.byte $00,$00,$00,$FF,$FF,$07,$E7,$07,$00,$00,$FF,$FF,$55,$03,$01,$03  ; 4
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$FC,$FC,$FC,$FC,$FC,$FC  ; 5
+	.byte $3F,$3F,$3F,$3F,$3F,$3F,$3F,$3F,$00,$00,$00,$00,$00,$00,$00,$00  ; 6
+	.byte $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F8,$F8,$F8,$F8,$F8,$F8,$F8,$F8  ; 7
+	.byte $C0,$C0,$C0,$C0,$C0,$C0,$C0,$C0,$1F,$1F,$1F,$1F,$1F,$1F,$1F,$1F  ; 8
+	.byte $FF,$E0,$FF,$00,$00,$00,$00,$00,$80,$C0,$FF,$FF,$FF,$FF,$FF,$FF  ; 9
+	.byte $FF,$3F,$FF,$00,$00,$00,$00,$00,$01,$17,$FF,$FF,$FF,$FF,$FF,$FF  ; 10
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$FC,$FC,$FC,$FC,$FC,$FC,$FC,$FC  ; 11
+	.byte $3F,$3F,$3F,$3F,$3F,$3F,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 12
+	.byte $FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$F8,$D8,$D8,$88,$F8,$F8,$00,$00  ; 13
+	.byte $C0,$C0,$C0,$C0,$C0,$C0,$00,$00,$1F,$1F,$1F,$1F,$1F,$1F,$00,$00  ; 14
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$01,$6D,$45,$6D,$6D,$01,$00,$00  ; 15
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$01,$45,$39,$39,$45,$01,$00,$00  ; 16
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$6C,$00,$6C,$6C,$00,$00,$00  ; 17
+; $1E–$23 truck
 	.byte $00,$1F,$3F,$3F,$3F,$3F,$3F,$3F,$00,$1F,$3F,$3F,$3F,$3F,$3F,$3F
 	.byte $00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF
 	.byte $00,$F8,$FC,$FE,$FE,$1E,$1E,$1E,$00,$F8,$FC,$FE,$FE,$1E,$1E,$1E
 	.byte $3F,$3F,$18,$3C,$3C,$18,$00,$00,$3F,$3F,$18,$3C,$3C,$18,$00,$00
 	.byte $FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00
 	.byte $1E,$1E,$18,$3C,$3C,$18,$00,$00,$1E,$1E,$18,$3C,$3C,$18,$00,$00
-; $16+ font: space, A-Z, !
+; $1E+ font: space, A-Z, !
 font_space:
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 	.byte $38,$44,$44,$7C,$44,$44,$44,$00,$38,$44,$44,$7C,$44,$44,$44,$00 ; A
@@ -260,14 +273,14 @@ player_walk2_flip:
 
 ; Palettes
 bg_palette:
-	.byte $0F, $21, $11, $30   ; sky blue / white text
-	.byte $0F, $17, $27, $07   ; cardboard brown
+	.byte $0F, $21, $11, $30   ; sky / white text
+	.byte $0F, $37, $27, $16   ; package: light card, body, red tape
 	.byte $0F, $00, $10, $20   ; asphalt gray
 	.byte $0F, $02, $12, $22   ; truck blue
 
 spr_palette:
 	.byte $0F, $27, $17, $30   ; player
-	.byte $0F, $17, $27, $07   ; package brown
+	.byte $0F, $37, $27, $16   ; package light/body/red
 	.byte $0F, $00, $10, $20
 	.byte $0F, $02, $12, $22
 
@@ -397,23 +410,47 @@ update_title:
 	rts
 
 draw_title_screen:
-	; 2×2 shipping box, row 10–11, col 15–16
+	; Flat shipping box 6×3 tiles, rows 9–11, cols 13–18 (centered)
+	; $2000 + 9*32 + 13 = $212D
 	lda #$21
 	sta PPUADDR
-	lda #$4F                ; row 10, col 15
+	lda #$2D
 	sta PPUADDR
-	lda #T_BOX_TL
+	ldx #0
+@row0:
+	txa
+	clc
+	adc #T_BOX0
 	sta PPUDATA
-	lda #T_BOX_TR
-	sta PPUDATA
+	inx
+	cpx #6
+	bne @row0
+
 	lda #$21
 	sta PPUADDR
-	lda #$6F                ; row 11, col 15
+	lda #$4D                ; row 10, col 13
 	sta PPUADDR
-	lda #T_BOX_BL
+@row1:
+	txa
+	clc
+	adc #T_BOX0
 	sta PPUDATA
-	lda #T_BOX_BR
+	inx
+	cpx #12
+	bne @row1
+
+	lda #$21
+	sta PPUADDR
+	lda #$6D                ; row 11, col 13
+	sta PPUADDR
+@row2:
+	txa
+	clc
+	adc #T_BOX0
 	sta PPUDATA
+	inx
+	cpx #18
+	bne @row2
 
 	; "VESYL SHIPPER" row 6, col 9
 	lda #$20
@@ -437,7 +474,7 @@ draw_title_screen:
 	sta ptr_hi
 	jsr draw_string
 
-	; Attributes: default palette 0; box area uses palette 1 (brown)
+	; Attributes: box uses palette 1 (light / card / red)
 	lda #$23
 	sta PPUADDR
 	lda #$C0
@@ -448,13 +485,14 @@ draw_title_screen:
 	sta PPUDATA
 	dex
 	bne @attr
-	; attr byte for rows 8-11, cols 8-15 → index (row/4)*8 + (col/4)
-	; rows 10-11, cols 15-16 → attr row 2, col 3 → offset 2*8+3 = 19 = $13
+	; rows 8–11, cols 12–19 → attr $D3,$D4  (and $D5 for col 20 edge)
 	lda #$23
 	sta PPUADDR
 	lda #$D3
 	sta PPUADDR
-	lda #%01010000          ; bottom-right 2×2 of this attr cell → pal 1
+	lda #$55
+	sta PPUDATA
+	sta PPUDATA
 	sta PPUDATA
 	rts
 
@@ -588,6 +626,15 @@ plat2_x_overlap:
 	rts
 
 apply_horizontal:
+	; speed: walk, or run while B held
+	lda #WALK_SPEED
+	sta temp
+	lda pad1
+	and #BTN_B
+	beq @spd
+	lda #RUN_SPEED
+	sta temp
+@spd:
 	lda pad1
 	and #BTN_RIGHT
 	beq @no_r
@@ -595,7 +642,7 @@ apply_horizontal:
 	sta facing
 	lda player_x_lo
 	clc
-	adc #MOVE_SPEED
+	adc temp
 	sta player_x_lo
 	lda player_x_hi
 	adc #0
@@ -608,7 +655,7 @@ apply_horizontal:
 	sta facing
 	lda player_x_lo
 	sec
-	sbc #MOVE_SPEED
+	sbc temp
 	sta player_x_lo
 	lda player_x_hi
 	sbc #0
