@@ -1629,24 +1629,22 @@ draw_package_sprites:
 	rts
 
 draw_held_package:
-	; Carry above head, slightly forward by facing (12×12 centered on 16px body)
+	; Carry mid-body (chest/arms), slightly forward by facing
+	; Player 16px tall; 12×12 box at +2 sits in torso, drawn first so it is in front
 	lda player_y
-	sec
-	sbc #12
-	bcs @yok
-	lda #0
-@yok:
+	clc
+	adc #2
 	sta temp2
 	lda facing
 	bne @face_l
 	lda screen_x
 	clc
-	adc #2                  ; (16-12)/2
+	adc #7                  ; in front when facing right
 	jmp @xset
 @face_l:
 	lda screen_x
 	sec
-	sbc #2
+	sbc #3                  ; in front when facing left
 	bcs @xset
 	lda #0
 @xset:
