@@ -40,7 +40,8 @@ make clean
 | **Start** | Begin from title / return from win |
 | **D-pad ← →** | Walk left / right (accelerates / coasts like Mario) |
 | **B** (hold) | Run (higher top speed) |
-| **A** | Jump (hold longer for higher jump, up to ~3×) |
+| **A** | Jump (hold longer for higher jump) |
+| **Down + A** | Drop through a shelf/platform |
 | **Select** | Drop package (while carrying) |
 
 1. Title screen: **VESYL SHIPPER** — press **Start**

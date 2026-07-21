@@ -85,11 +85,32 @@ MAX_SCROLL_H = $01
 GROUND_TOP_Y = 168          ; pixel Y of ground surface (row 21)
 ; nametable rows: ground top at row 21 (21*8=168)
 
-PKG_WORLD_X_L = 80          ; package world X (past spawn so not auto-picked)
-PKG_WORLD_X_H = 0
-PKG_WORLD_Y   = 156         ; 12×12 package sits on ground (top at 168-12)
+; Warehouse geometry (NT0 / world X 0–127)
+WH_LEFT       = 16          ; left wall solid x < 16 (cols 0–1)
+WH_RIGHT_L    = 96          ; right wall cols 12–13 → x 96–112
+WH_RIGHT_R    = 112
+WH_DOOR_TOP   = 136         ; open doorway for y >= 136 (tile rows 17+)
+WH_CEILING    = 40          ; bottom of ceiling (row 5 → y 40)
+
+; Climbable shelves (platform tops), ~24px steps (within jump height)
+; X ranges leave gaps from walls so you can drop off a side
+SHELF_LOW_Y   = 144         ; row 18, x 24–64 (cols 3–7)
+SHELF_MID_Y   = 120         ; row 15, x 48–88 (cols 6–10)
+SHELF_HIGH_Y  = 96          ; row 12, x 32–72 (cols 4–8) — package here
+SHELF_LOW_L   = 24
+SHELF_LOW_R   = 64
+SHELF_MID_L   = 48
+SHELF_MID_R   = 88
+SHELF_HIGH_L  = 32
+SHELF_HIGH_R  = 72
+
+DROP_FRAMES   = 18          ; ignore platforms this long after down+jump
+
 PKG_W         = 12
 PKG_H         = 12
+PKG_WORLD_X_L = 44          ; on high shelf center
+PKG_WORLD_X_H = 0
+PKG_WORLD_Y   = SHELF_HIGH_Y - PKG_H   ; 84
 PKG_THROW     = $04          ; extra horizontal toss on drop (0.25 px/f)
 
 ; Truck BG tiles: NT1 cols 22–27 → world X 432–480 (hi=$01)
@@ -125,6 +146,7 @@ screen_x:          .res 1
 vel_x:             .res 1   ; signed, 1/16 px per frame
 vel_y:             .res 1   ; signed, 1/16 px per frame
 on_ground:         .res 1
+drop_timer:        .res 1   ; >0: fall through platforms (down+jump)
 anim_frame:        .res 1
 facing:            .res 1   ; 0=right, 1=left (flip)
 has_package:       .res 1
@@ -564,6 +586,7 @@ enter_play:
 	sta player_y_sub
 	sta anim_frame
 	sta facing
+	sta drop_timer
 	sta player_x_hi
 	lda #40
 	sta player_x_lo
@@ -613,6 +636,8 @@ update_play:
 	sta old_y
 
 	jsr apply_horizontal
+	jsr collide_walls          ; warehouse brick solids
+	jsr tick_drop_timer
 	jsr probe_support          ; clear on_ground if walked off ledge
 	jsr apply_jump
 	jsr apply_gravity
@@ -625,6 +650,13 @@ update_play:
 	jsr draw_play_sprites
 	rts
 
+tick_drop_timer:
+	lda drop_timer
+	beq @done
+	dec drop_timer
+@done:
+	rts
+
 ; Set on_ground if feet rest on ground or a platform (no movement)
 probe_support:
 	lda #0
@@ -632,42 +664,73 @@ probe_support:
 	lda player_y
 	clc
 	adc #PLAYER_H
+	sta check_y
 	cmp #GROUND_TOP_Y
 	bne @plats
 	lda #1
 	sta on_ground
 	rts
 @plats:
-	; platform 1 @ y=136, x 160-224 — any horizontal overlap with 16px body
-	cmp #136
-	bne @p2
-	jsr plat1_x_overlap
-	bcc @p2
-	lda #1
-	sta on_ground
-	rts
-@p2:
-	; platform 2 @ y=144, x 320-384
-	cmp #144
+	; down+jump drop-through: ignore platforms while timer active
+	lda drop_timer
 	bne @done
-	jsr plat2_x_overlap
+	lda player_x_lo
+	sta check_x_lo
+	lda player_x_hi
+	sta check_x_hi
+	lda #PLAYER_W
+	sta temp3
+	jsr feet_on_any_platform
 	bcc @done
 	lda #1
 	sta on_ground
 @done:
 	rts
 
-; C=1 if player [x, x+16) overlaps platform 1 [160, 224)
-; i.e. player_x < 224 AND player_x + 16 > 160
-plat1_x_overlap:
-	lda player_x_hi
-	bne @no                   ; x >= 256, past this platform
-	lda player_x_lo
-	cmp #224
-	bcs @no                   ; left edge at/past platform right
+; feet_on_any_platform: check_y = feet, check_x_* = left, temp3 = width
+; C=1 if standing on a shelf/platform (feet at exact top)
+feet_on_any_platform:
+	; shelf high 96
+	lda check_y
+	cmp #SHELF_HIGH_Y
+	bne @mid
+	jsr x_overlap_shelf_high
+	rts
+@mid:
+	cmp #SHELF_MID_Y
+	bne @low
+	jsr x_overlap_shelf_mid
+	rts
+@low:
+	cmp #SHELF_LOW_Y
+	bne @out1
+	jsr x_overlap_shelf_low
+	rts
+@out1:
+	cmp #136
+	bne @out2
+	jsr plat1_x_overlap
+	rts
+@out2:
+	cmp #144
+	bne @no
+	jsr plat2_x_overlap
+	rts
+@no:
 	clc
-	adc #PLAYER_W
-	cmp #161                  ; right edge > 160
+	rts
+
+; X overlap helpers: check_x / temp3 width vs [x0,x1)
+; shelf high [SHELF_HIGH_L, SHELF_HIGH_R)
+x_overlap_shelf_high:
+	lda check_x_hi
+	bne @no
+	lda check_x_lo
+	cmp #SHELF_HIGH_R
+	bcs @no
+	clc
+	adc temp3
+	cmp #SHELF_HIGH_L + 1
 	bcc @no
 	sec
 	rts
@@ -675,23 +738,143 @@ plat1_x_overlap:
 	clc
 	rts
 
-; C=1 if player overlaps platform 2 [320, 384)
-; i.e. player_x < 384 AND player_x + 16 > 320
-plat2_x_overlap:
-	lda player_x_hi
-	cmp #1
-	bne @no                   ; only in second screen half
-	lda player_x_lo
-	cmp #128                  ; world x >= 384
+; shelf mid [SHELF_MID_L, SHELF_MID_R)
+x_overlap_shelf_mid:
+	lda check_x_hi
+	bne @no
+	lda check_x_lo
+	cmp #SHELF_MID_R
 	bcs @no
 	clc
-	adc #PLAYER_W
-	cmp #65                   ; world (256+lo+16) > 320 → lo+16 > 64
+	adc temp3
+	cmp #SHELF_MID_L + 1
 	bcc @no
 	sec
 	rts
 @no:
 	clc
+	rts
+
+; shelf low [SHELF_LOW_L, SHELF_LOW_R)
+x_overlap_shelf_low:
+	lda check_x_hi
+	bne @no
+	lda check_x_lo
+	cmp #SHELF_LOW_R
+	bcs @no
+	clc
+	adc temp3
+	cmp #SHELF_LOW_L + 1
+	bcc @no
+	sec
+	rts
+@no:
+	clc
+	rts
+
+; outdoor platform 1 [160,224) y=136
+plat1_x_overlap:
+	lda check_x_hi
+	bne @no
+	lda check_x_lo
+	cmp #224
+	bcs @no
+	clc
+	adc temp3
+	cmp #161
+	bcc @no
+	sec
+	rts
+@no:
+	clc
+	rts
+
+; outdoor platform 2 [320,384) y=144
+plat2_x_overlap:
+	lda check_x_hi
+	cmp #1
+	bne @no
+	lda check_x_lo
+	cmp #128
+	bcs @no
+	clc
+	adc temp3
+	cmp #65
+	bcc @no
+	sec
+	rts
+@no:
+	clc
+	rts
+
+; Warehouse walls + ceiling. Call after horizontal move.
+collide_walls:
+	; --- left wall: x < WH_LEFT ---
+	lda player_x_hi
+	bne @right
+	lda player_x_lo
+	cmp #WH_LEFT
+	bcs @right
+	lda #WH_LEFT
+	sta player_x_lo
+	lda #0
+	sta player_x_sub
+	lda vel_x
+	bpl @right
+	lda #0
+	sta vel_x
+
+@right:
+	; --- right wall solid when body overlaps [WH_RIGHT_L, WH_RIGHT_R) × [0, WH_DOOR_TOP) ---
+	lda player_x_hi
+	bne @ceil
+	; player right > wall left && player left < wall right
+	lda player_x_lo
+	cmp #WH_RIGHT_R
+	bcs @ceil
+	clc
+	adc #PLAYER_W
+	cmp #WH_RIGHT_L + 1
+	bcc @ceil
+	; Y: any part of player above door top (player_y < WH_DOOR_TOP)
+	lda player_y
+	cmp #WH_DOOR_TOP
+	bcs @ceil                 ; fully in doorway height
+	; push out based on old position
+	lda old_x_lo
+	cmp #WH_RIGHT_L
+	bcc @push_l
+	; from right or inside → push to right of wall
+	lda #WH_RIGHT_R
+	sta player_x_lo
+	jmp @stop_x
+@push_l:
+	lda #WH_RIGHT_L - PLAYER_W
+	sta player_x_lo
+@stop_x:
+	lda #0
+	sta player_x_sub
+	sta vel_x
+
+@ceil:
+	; ceiling inside warehouse (x < WH_RIGHT_R): keep head below WH_CEILING
+	lda player_x_hi
+	bne @done
+	lda player_x_lo
+	cmp #WH_RIGHT_R
+	bcs @done
+	lda player_y
+	cmp #WH_CEILING
+	bcs @done
+	lda #WH_CEILING
+	sta player_y
+	lda #0
+	sta player_y_sub
+	lda vel_y
+	bpl @done
+	lda #0
+	sta vel_y
+@done:
 	rts
 
 ; Mario-style run: accelerate / skid / friction, then integrate subpixels.
@@ -880,6 +1063,27 @@ apply_jump:
 	beq @done
 	lda on_ground
 	beq @done
+	; Hold Down+A on a platform → drop through (not on solid ground)
+	lda pad1
+	and #BTN_DOWN
+	beq @normal_jump
+	lda player_y
+	clc
+	adc #PLAYER_H
+	cmp #GROUND_TOP_Y
+	beq @normal_jump          ; on floor: normal jump, don't drop through world
+	; fall through shelf/platform
+	lda #DROP_FRAMES
+	sta drop_timer
+	lda #0
+	sta on_ground
+	sta player_y_sub
+	lda #GRAVITY * 4          ; small downward nudge
+	sta vel_y
+	; nudge 1px down so feet leave platform top
+	inc player_y
+	rts
+@normal_jump:
 	lda has_package
 	bne @carry
 	lda #JUMP_V
@@ -996,33 +1200,31 @@ collide_vertical:
 	rts
 
 @plats:
-	; Platform 1: any body overlap with [160,224), feet crossing top 136
-	jsr plat1_x_overlap
-	bcc @p2
-	lda check_y
-	cmp #136
-	bcc @p2
-	cmp #144
-	bcs @p2
-	lda #136 - PLAYER_H
-	sta player_y
-	lda #0
-	sta vel_y
-	sta player_y_sub
-	lda #1
-	sta on_ground
+	; drop-through: skip shelves/platforms while timer active
+	lda drop_timer
+	bne @done
+	lda player_x_lo
+	sta check_x_lo
+	lda player_x_hi
+	sta check_x_hi
+	lda #PLAYER_W
+	sta temp3
+	; try each surface: feet in [top, top+8)
+	jsr try_land_shelf_high
+	bcs @snap
+	jsr try_land_shelf_mid
+	bcs @snap
+	jsr try_land_shelf_low
+	bcs @snap
+	jsr try_land_plat1
+	bcs @snap
+	jsr try_land_plat2
+	bcs @snap
 	rts
-
-@p2:
-	; Platform 2: any body overlap with [320,384), top 144
-	jsr plat2_x_overlap
-	bcc @done
-	lda check_y
-	cmp #144
-	bcc @done
-	cmp #152
-	bcs @done
-	lda #144 - PLAYER_H
+@snap:
+	; A = platform top Y
+	sec
+	sbc #PLAYER_H
 	sta player_y
 	lda #0
 	sta vel_y
@@ -1030,6 +1232,82 @@ collide_vertical:
 	lda #1
 	sta on_ground
 @done:
+	rts
+
+; try_land_*: C=1 and A=top_y if feet landing on that surface
+try_land_shelf_high:
+	lda check_y
+	cmp #SHELF_HIGH_Y
+	bcc @no
+	cmp #SHELF_HIGH_Y + 8
+	bcs @no
+	jsr x_overlap_shelf_high
+	bcc @no
+	lda #SHELF_HIGH_Y
+	sec
+	rts
+@no:
+	clc
+	rts
+
+try_land_shelf_mid:
+	lda check_y
+	cmp #SHELF_MID_Y
+	bcc @no
+	cmp #SHELF_MID_Y + 8
+	bcs @no
+	jsr x_overlap_shelf_mid
+	bcc @no
+	lda #SHELF_MID_Y
+	sec
+	rts
+@no:
+	clc
+	rts
+
+try_land_shelf_low:
+	lda check_y
+	cmp #SHELF_LOW_Y
+	bcc @no
+	cmp #SHELF_LOW_Y + 8
+	bcs @no
+	jsr x_overlap_shelf_low
+	bcc @no
+	lda #SHELF_LOW_Y
+	sec
+	rts
+@no:
+	clc
+	rts
+
+try_land_plat1:
+	lda check_y
+	cmp #136
+	bcc @no
+	cmp #144
+	bcs @no
+	jsr plat1_x_overlap
+	bcc @no
+	lda #136
+	sec
+	rts
+@no:
+	clc
+	rts
+
+try_land_plat2:
+	lda check_y
+	cmp #144
+	bcc @no
+	cmp #152
+	bcs @no
+	jsr plat2_x_overlap
+	bcc @no
+	lda #144
+	sec
+	rts
+@no:
+	clc
 	rts
 
 update_camera:
@@ -1176,6 +1454,7 @@ update_free_package:
 	sta package_vel_x
 @x_move:
 	jsr package_integrate_x
+	jsr package_collide_walls
 
 	; Vertical: rest on ground unless falling / walked off
 	lda package_on_ground
@@ -1219,29 +1498,28 @@ update_free_package:
 	jmp package_landed
 
 @plats:
-	jsr pkg_plat1_x_overlap
-	bcc @p2
-	lda check_y
-	cmp #136
-	bcc @p2
-	cmp #144
-	bcs @p2
-	lda #136 - PKG_H
-	sta package_y
-	jmp package_landed
-@p2:
-	jsr pkg_plat2_x_overlap
-	bcc @no_land
-	lda check_y
-	cmp #144
-	bcc @no_land
-	cmp #152
-	bcs @no_land
-	lda #144 - PKG_H
-	sta package_y
-	jmp package_landed
-@no_land:
+	lda package_x_lo
+	sta check_x_lo
+	lda package_x_hi
+	sta check_x_hi
+	lda #PKG_W
+	sta temp3
+	jsr try_land_shelf_high
+	bcs @snap
+	jsr try_land_shelf_mid
+	bcs @snap
+	jsr try_land_shelf_low
+	bcs @snap
+	jsr try_land_plat1
+	bcs @snap
+	jsr try_land_plat2
+	bcs @snap
 	rts
+@snap:
+	sec
+	sbc #PKG_H
+	sta package_y
+	jmp package_landed
 
 package_landed:
 	lda #0
@@ -1251,28 +1529,90 @@ package_landed:
 	sta package_on_ground
 	rts
 
+; Package vs warehouse walls/ceiling (same rules as player)
+package_collide_walls:
+	; left wall
+	lda package_x_hi
+	bne @right
+	lda package_x_lo
+	cmp #WH_LEFT
+	bcs @right
+	lda #WH_LEFT
+	sta package_x_lo
+	lda #0
+	sta package_x_sub
+	lda package_vel_x
+	bpl @right
+	lda #0
+	sta package_vel_x
+@right:
+	; right wall solid above door
+	lda package_x_hi
+	bne @ceil
+	lda package_x_lo
+	cmp #WH_RIGHT_R
+	bcs @ceil
+	clc
+	adc #PKG_W
+	cmp #WH_RIGHT_L + 1
+	bcc @ceil
+	lda package_y
+	cmp #WH_DOOR_TOP
+	bcs @ceil
+	; push out: if package center-ish left of wall, push left
+	lda package_x_lo
+	cmp #WH_RIGHT_L
+	bcc @push_l
+	lda #WH_RIGHT_R
+	sta package_x_lo
+	jmp @stop_x
+@push_l:
+	lda #WH_RIGHT_L
+	sec
+	sbc #PKG_W
+	sta package_x_lo
+@stop_x:
+	lda #0
+	sta package_x_sub
+	sta package_vel_x
+@ceil:
+	lda package_x_hi
+	bne @done
+	lda package_x_lo
+	cmp #WH_RIGHT_R
+	bcs @done
+	lda package_y
+	cmp #WH_CEILING
+	bcs @done
+	lda #WH_CEILING
+	sta package_y
+	lda #0
+	sta package_y_sub
+	lda package_vel_y
+	bpl @done
+	lda #0
+	sta package_vel_y
+@done:
+	rts
+
 ; Clear package_on_ground if feet no longer on a surface
 package_probe_support:
 	lda package_y
 	clc
 	adc #PKG_H
+	sta check_y
 	cmp #GROUND_TOP_Y
 	bne @plats
 	rts
 @plats:
-	cmp #136
-	bne @p2
-	jsr pkg_plat1_x_overlap
+	lda package_x_lo
+	sta check_x_lo
+	lda package_x_hi
+	sta check_x_hi
+	lda #PKG_W
+	sta temp3
+	jsr feet_on_any_platform
 	bcs @ok
-	lda #0
-	sta package_on_ground
-	rts
-@p2:
-	cmp #144
-	bne @off
-	jsr pkg_plat2_x_overlap
-	bcs @ok
-@off:
 	lda #0
 	sta package_on_ground
 @ok:
@@ -1401,41 +1741,6 @@ package_integrate_y:
 @ydone:
 	lda temp
 	sta package_y_sub
-	rts
-
-; C=1 if package [x, x+PKG_W) overlaps platform 1 [160, 224)
-pkg_plat1_x_overlap:
-	lda package_x_hi
-	bne @no
-	lda package_x_lo
-	cmp #224
-	bcs @no
-	clc
-	adc #PKG_W
-	cmp #161
-	bcc @no
-	sec
-	rts
-@no:
-	clc
-	rts
-
-; C=1 if package overlaps platform 2 [320, 384)
-pkg_plat2_x_overlap:
-	lda package_x_hi
-	cmp #1
-	bne @no
-	lda package_x_lo
-	cmp #128
-	bcs @no
-	clc
-	adc #PKG_W
-	cmp #65
-	bcc @no
-	sec
-	rts
-@no:
-	clc
 	rts
 
 check_package:
@@ -1822,38 +2127,46 @@ fill_ground_nt:
 	bne @row
 	rts
 
-draw_warehouse:
-	; Ceiling row 11, cols 0-9: $2000+11*32 = $2160
-	lda #$21
-	sta PPUADDR
-	lda #$60
-	sta PPUADDR
-	ldx #10
-	lda #T_BRICK
-@ceil:
-	sta PPUDATA
-	dex
-	bne @ceil
-
-	; Left wall cols 0-1, rows 12-20
-	ldx #12
-@left:
-	txa
-	sta temp
+; Set PPUADDR to NT0 row X, col 0. X in register X.
+pp_row_nt0:
+	stx temp
 	lda #0
 	sta temp_hi
 	ldy #5
-@ml:
+@sh:
 	asl temp
 	rol temp_hi
 	dey
-	bne @ml
+	bne @sh
 	lda temp_hi
 	clc
 	adc #$20
 	sta PPUADDR
 	lda temp
 	sta PPUADDR
+	rts
+
+draw_warehouse:
+	; Tall warehouse cols 0–13, ceiling row 5, walls rows 6–20
+	; Right wall cols 12–13 with doorway rows 17–20 open
+	bit PPUSTATUS
+
+	; Ceiling row 5, cols 0–13: $2000+5*32 = $20A0
+	lda #$20
+	sta PPUADDR
+	lda #$A0
+	sta PPUADDR
+	ldx #14
+	lda #T_BRICK
+@ceil:
+	sta PPUDATA
+	dex
+	bne @ceil
+
+	; Left wall cols 0–1, rows 6–20
+	ldx #6
+@left:
+	jsr pp_row_nt0
 	lda #T_BRICK
 	sta PPUDATA
 	sta PPUDATA
@@ -1861,22 +2174,26 @@ draw_warehouse:
 	cpx #21
 	bcc @left
 
-	; Door post cols 8-9, rows 12-20
-	ldx #12
-@post:
+	; Right wall cols 12–13, rows 6–16 only (door below)
+	ldx #6
+@right:
 	txa
+	pha
+	jsr pp_row_nt0
+	; advance to col 12: write 12 skies then 2 bricks — or set addr
+	pla
 	sta temp
 	lda #0
 	sta temp_hi
 	ldy #5
-@mp:
+@rs:
 	asl temp
 	rol temp_hi
 	dey
-	bne @mp
+	bne @rs
 	lda temp
 	clc
-	adc #8
+	adc #12
 	sta temp
 	lda temp_hi
 	adc #0
@@ -1889,16 +2206,55 @@ draw_warehouse:
 	sta PPUDATA
 	sta PPUDATA
 	inx
-	cpx #21
-	bcc @post
+	cpx #17
+	bcc @right
+
+	; Door frame lintel row 16, cols 12–13 (top of opening)
+	; already drawn as wall row 16. Opening rows 17–20 empty (sky).
+
+	; Shelves with side gaps so you can drop off (match collision X ranges)
+	; High shelf row 12 (y=96), cols 4–8 (x 32–72)
+	lda #$21
+	sta PPUADDR
+	lda #$84                ; 12*32+4 = $184 → $2184
+	sta PPUADDR
+	ldx #5
+	lda #T_PLATFORM
+@sh:
+	sta PPUDATA
+	dex
+	bne @sh
+
+	; Mid shelf row 15 (y=120), cols 6–10 (x 48–88)
+	lda #$21
+	sta PPUADDR
+	lda #$E6                ; 15*32+6 = $1E6 → $21E6
+	sta PPUADDR
+	ldx #5
+	lda #T_PLATFORM
+@sm:
+	sta PPUDATA
+	dex
+	bne @sm
+
+	; Low shelf row 18 (y=144), cols 3–7 (x 24–64)
+	lda #$22
+	sta PPUADDR
+	lda #$43                ; 18*32+3 = $243 → $2243
+	sta PPUADDR
+	ldx #5
+	lda #T_PLATFORM
+@sl:
+	sta PPUDATA
+	dex
+	bne @sl
 	rts
 
 draw_platform_tiles:
-	; Reset PPU address latch before VRAM writes
+	; Outdoor platforms only (warehouse shelves drawn in draw_warehouse)
 	bit PPUSTATUS
 
 	; Platform 1: world px 160-224 (cols 20-27), top at y=136 → tile row 17
-	; NT0 addr = $2000 + 17*32 + 20 = $2234
 	lda #$22
 	sta PPUADDR
 	lda #$34
@@ -1911,7 +2267,6 @@ draw_platform_tiles:
 	bne @p1
 
 	; Platform 2: world px 320-384 (NT1 cols 8-15), top at y=144 → tile row 18
-	; NT1 addr = $2400 + 18*32 + 8 = $2648
 	bit PPUSTATUS
 	lda #$26
 	sta PPUADDR
