@@ -69,7 +69,8 @@ PLAYER_WALK_3 = T_PLAYER5
 PLAYER_W     = 16
 PLAYER_H     = 16
 GRAVITY      = 1
-JUMP_V       = $FB          ; -5 signed
+; Full hold peak ≈ 9+8+…+1 = 45 px (~3× old 15 px from JUMP_V=-5)
+JUMP_V       = $F7          ; -9 signed (max jump impulse)
 MAX_FALL     = 6
 MOVE_SPEED   = 2
 CAMERA_OFF   = 96
@@ -166,8 +167,8 @@ player_s_3_walk:
 	.byte $AA,$55,$AA,$55,$AA,$55,$AA,$55,$55,$AA,$55,$AA,$55,$AA,$55,$AA
 ; $09 brick
 	.byte $FF,$81,$BD,$BD,$FF,$DB,$DB,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
-; $0A platform
-	.byte $FF,$FF,$81,$81,$00,$00,$00,$00,$FF,$00,$7E,$7E,$00,$00,$00,$00
+; $0A platform — full 8×8 solid ledge (white top, blue body; always visible on black sky)
+	.byte $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF
 ; $0B box (sprite)
 	.byte $FF,$81,$A5,$81,$BD,$99,$81,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
 ; $0C-$0F title box 2×2 (cardboard package)
@@ -636,6 +637,15 @@ apply_gravity:
 	sta vel_y
 	rts
 @air:
+	; Variable jump: release A while rising → cut upward velocity
+	lda vel_y
+	bpl @grav                 ; not rising
+	lda pad1
+	and #BTN_A
+	bne @grav                 ; still holding A → full arc
+	lda #0
+	sta vel_y                 ; short hop
+@grav:
 	lda vel_y
 	clc
 	adc #GRAVITY
@@ -1007,22 +1017,17 @@ update_win:
 ; -------------------------
 build_level:
 	; Fill NT0 and NT1 with sky, then ground, props
+	bit PPUSTATUS
 	jsr clear_nametables
 
 	; Ground rows 21-29 on both nametables (tile rows)
-	; For each nametable base $2000 / $2400
 	lda #$20
 	jsr fill_ground_nt
 	lda #$24
 	jsr fill_ground_nt
 
-	; Warehouse walls on NT0 (cols 0-8)
 	jsr draw_warehouse
-
-	; Platforms as BG tiles
 	jsr draw_platform_tiles
-
-	; Truck on NT1 toward right: world col 54-59 → NT1 col 22-27
 	jsr draw_truck
 
 	; Attributes both NT
@@ -1150,11 +1155,11 @@ draw_warehouse:
 	rts
 
 draw_platform_tiles:
-	; platform 1: world x 160-224 = cols 20-27 on NT0, row 17 (136/8=17)
-	lda #$22
-	sta PPUADDR
-	lda #$14                ; row 17 = 17*32=544=$220 → $2220 + 20 = $2234
-	; $2000 + 17*32 + 20 = $2000 + $220 + $14 = $2234
+	; Reset PPU address latch before VRAM writes
+	bit PPUSTATUS
+
+	; Platform 1: world px 160-224 (cols 20-27), top at y=136 → tile row 17
+	; NT0 addr = $2000 + 17*32 + 20 = $2234
 	lda #$22
 	sta PPUADDR
 	lda #$34
@@ -1166,8 +1171,9 @@ draw_platform_tiles:
 	dex
 	bne @p1
 
-	; platform 2: world 320-384 = NT1 cols 8-15 (320/8=40, 40-32=8), row 18 (144/8)
-	; $2400 + 18*32 + 8 = $2400 + $240 + 8 = $2648
+	; Platform 2: world px 320-384 (NT1 cols 8-15), top at y=144 → tile row 18
+	; NT1 addr = $2400 + 18*32 + 8 = $2648
+	bit PPUSTATUS
 	lda #$26
 	sta PPUADDR
 	lda #$48
@@ -1393,6 +1399,8 @@ nmi:
 	lda #$02
 	sta OAMDMA
 
+	; Reset shared PPU latch, then set scroll (Y must stay 0)
+	bit PPUSTATUS
 	lda ppuctrl_nt
 	sta PPUCTRL
 	lda scroll_lo

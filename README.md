@@ -28,7 +28,7 @@ make clean
 |---------|--------|
 | **Start** | Begin from title / return from win |
 | **D-pad ← →** | Walk left / right |
-| **A** | Jump |
+| **A** | Jump (hold longer for higher jump, up to ~3×) |
 
 1. Title screen: **VESYL SHIPPER** — press **Start**
 2. Pick up the package in the warehouse (walk into it)
