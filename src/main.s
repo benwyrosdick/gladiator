@@ -63,14 +63,17 @@ PLAYER_WALK_3 = T_PLAYER5
 
 PLAYER_W     = 16
 PLAYER_H     = 16
-GRAVITY      = 1
-; Full hold peak ≈ 9+8+…+1 = 45 px (~3× old 15 px from JUMP_V=-5)
-JUMP_V       = $F7          ; -9 signed (max jump impulse)
-MAX_FALL     = 6
+; Vertical motion in 1/16 px (same units as vel_x) for smooth gravity arc
+; Hold-A peak ≈ 43 px over ~18 frames; release A clamps rise for short hop
+GRAVITY      = $04          ; +0.25 px/f²
+JUMP_V       = $B8          ; -72 → -4.5 px/f takeoff (empty-handed)
+JUMP_V_CARRY = $C0          ; -64 → -4.0 px/f while holding package (lower peak)
+JUMP_CUT     = $E8          ; -24 → -1.5 px/f max rise after releasing A
+MAX_FALL     = $60          ; 6.0 px/f terminal
 ; Horizontal motion (Mario-style accel / friction), units = 1/16 pixel
 ; Peak speeds ≈ walk 2px/f, run 4px/f
-WALK_MAX     = 32
-RUN_MAX      = 64
+WALK_MAX     = 24
+RUN_MAX      = 48
 ACCEL        = 3              ; speed up when holding a direction
 FRICTION     = 2              ; slow down when no input
 SKID         = 5              ; brake faster when reversing
@@ -87,6 +90,7 @@ PKG_WORLD_X_H = 0
 PKG_WORLD_Y   = 156         ; 12×12 package sits on ground (top at 168-12)
 PKG_W         = 12
 PKG_H         = 12
+PKG_THROW     = $04          ; extra horizontal toss on drop (0.25 px/f)
 
 ; Truck BG tiles: NT1 cols 22–27 → world X 432–480 (hi=$01)
 TRUCK_LEFT_L  = $B0         ; 256+176=432
@@ -116,13 +120,22 @@ player_x_lo:       .res 1
 player_x_hi:       .res 1
 player_x_sub:      .res 1   ; subpixel 0–15 (1/16 px)
 player_y:          .res 1
+player_y_sub:      .res 1   ; subpixel 0–15 (1/16 px)
 screen_x:          .res 1
 vel_x:             .res 1   ; signed, 1/16 px per frame
-vel_y:             .res 1   ; signed
+vel_y:             .res 1   ; signed, 1/16 px per frame
 on_ground:         .res 1
 anim_frame:        .res 1
 facing:            .res 1   ; 0=right, 1=left (flip)
 has_package:       .res 1
+package_x_lo:      .res 1   ; world X of free package (when not held)
+package_x_hi:      .res 1
+package_x_sub:     .res 1   ; subpixel 0–15
+package_y:         .res 1
+package_y_sub:     .res 1   ; subpixel 0–15
+package_vel_x:     .res 1   ; signed, 1/16 px per frame
+package_vel_y:     .res 1   ; signed, 1/16 px per frame
+package_on_ground: .res 1
 old_x_lo:          .res 1
 old_x_hi:          .res 1
 old_y:             .res 1
@@ -534,6 +547,7 @@ enter_play:
 	sta vel_x
 	sta vel_y
 	sta player_x_sub
+	sta player_y_sub
 	sta anim_frame
 	sta facing
 	sta player_x_hi
@@ -541,7 +555,19 @@ enter_play:
 	sta player_x_lo
 	lda #GROUND_TOP_Y - PLAYER_H
 	sta player_y
+	lda #PKG_WORLD_X_L
+	sta package_x_lo
+	lda #PKG_WORLD_X_H
+	sta package_x_hi
+	lda #PKG_WORLD_Y
+	sta package_y
+	lda #0
+	sta package_x_sub
+	sta package_y_sub
+	sta package_vel_x
+	sta package_vel_y
 	lda #1
+	sta package_on_ground
 	sta on_ground
 	lda #%10000000
 	sta ppuctrl_nt
@@ -578,6 +604,8 @@ update_play:
 	jsr apply_gravity
 	jsr collide_vertical
 	jsr update_camera
+	jsr check_drop_package
+	jsr update_free_package
 	jsr check_package
 	jsr check_truck
 	jsr draw_play_sprites
@@ -838,10 +866,17 @@ apply_jump:
 	beq @done
 	lda on_ground
 	beq @done
+	lda has_package
+	bne @carry
 	lda #JUMP_V
+	jmp @setv
+@carry:
+	lda #JUMP_V_CARRY         ; heavier while holding box
+@setv:
 	sta vel_y
 	lda #0
 	sta on_ground
+	sta player_y_sub
 @done:
 	rts
 
@@ -849,34 +884,81 @@ apply_gravity:
 	lda on_ground
 	beq @air
 	lda vel_y
-	bmi @air                  ; jumping through
+	bmi @air                  ; still rising through platform edge
 	lda #0
 	sta vel_y
+	sta player_y_sub
 	rts
 @air:
-	; Variable jump: release A while rising → cut upward velocity
+	; Variable jump: release A while rising → soft-cap upward speed (not zero)
 	lda vel_y
-	bpl @grav                 ; not rising
+	bpl @grav                 ; falling / apex
 	lda pad1
 	and #BTN_A
-	bne @grav                 ; still holding A → full arc
-	lda #0
-	sta vel_y                 ; short hop
+	bne @grav                 ; holding A → full arc
+	lda vel_y
+	cmp #JUMP_CUT             ; both negative: unsigned < ⇒ more upward
+	bcs @grav
+	lda #JUMP_CUT
+	sta vel_y
 @grav:
 	lda vel_y
 	clc
 	adc #GRAVITY
 	sta vel_y
-	bmi @add
+	bmi @integrate            ; still rising, skip fall cap
 	cmp #MAX_FALL + 1
-	bcc @add
+	bcc @integrate
 	lda #MAX_FALL
 	sta vel_y
-@add:
-	lda player_y
+@integrate:
+	; player_y_sub + vel_y → subpixel, carry whole pixels into player_y
+	lda player_y_sub
 	clc
 	adc vel_y
-	sta player_y
+	sta temp
+	lda vel_y
+	bmi @signneg
+	lda #0
+	jmp @addhi
+@signneg:
+	lda #$FF
+@addhi:
+	adc #0
+	sta temp2                 ; hi (sign-extended)
+
+@norm_ge:
+	lda temp2
+	bmi @norm_lt
+	bne @do_sub16
+	lda temp
+	cmp #16
+	bcc @norm_done
+@do_sub16:
+	lda temp
+	sec
+	sbc #16
+	sta temp
+	lda temp2
+	sbc #0
+	sta temp2
+	inc player_y
+	jmp @norm_ge
+
+@norm_lt:
+	lda temp
+	clc
+	adc #16
+	sta temp
+	lda temp2
+	adc #0
+	sta temp2
+	dec player_y
+	jmp @norm_ge
+
+@norm_done:
+	lda temp
+	sta player_y_sub
 	rts
 
 ; Land on ground / platforms when falling
@@ -894,6 +976,7 @@ collide_vertical:
 	sta player_y
 	lda #0
 	sta vel_y
+	sta player_y_sub
 	lda #1
 	sta on_ground
 	rts
@@ -911,6 +994,7 @@ collide_vertical:
 	sta player_y
 	lda #0
 	sta vel_y
+	sta player_y_sub
 	lda #1
 	sta on_ground
 	rts
@@ -928,6 +1012,7 @@ collide_vertical:
 	sta player_y
 	lda #0
 	sta vel_y
+	sta player_y_sub
 	lda #1
 	sta on_ground
 @done:
@@ -989,28 +1074,405 @@ update_camera:
 	; result should be 0-255 in screen_x low; ignore hi
 	rts
 
+check_drop_package:
+	; Select while carrying → drop beside player (not under feet — avoids instant re-pickup)
+	lda pad1_edge
+	and #BTN_SELECT
+	beq @done
+	lda has_package
+	beq @done
+	lda player_y
+	clc
+	adc #(PLAYER_H - PKG_H) ; release at feet height (falls if mid-air)
+	sta package_y
+	lda #0
+	sta package_x_sub
+	sta package_y_sub
+	sta package_on_ground
+	; inherit downward velocity so air drops keep falling
+	lda vel_y
+	bpl @inhy
+	lda #0
+@inhy:
+	sta package_vel_y
+	; horizontal: player vel_x + slight throw in facing direction
+	lda vel_x
+	sta package_vel_x
+	lda facing
+	bne @drop_l
+	lda package_vel_x
+	clc
+	adc #PKG_THROW
+	sta package_vel_x
+	; facing right → place just to the right of player
+	lda player_x_lo
+	clc
+	adc #PLAYER_W
+	sta package_x_lo
+	lda player_x_hi
+	adc #0
+	sta package_x_hi
+	jmp @clear
+@drop_l:
+	lda package_vel_x
+	sec
+	sbc #PKG_THROW
+	sta package_vel_x
+	; facing left → place just to the left
+	lda player_x_lo
+	sec
+	sbc #PKG_W
+	sta package_x_lo
+	lda player_x_hi
+	sbc #0
+	sta package_x_hi
+	bpl @clear
+	lda #0
+	sta package_x_lo
+	sta package_x_hi
+@clear:
+	lda #0
+	sta has_package
+@done:
+	rts
+
+; Free package: horizontal coast/throw + gravity + land
+update_free_package:
+	lda has_package
+	beq @run
+	rts
+@run:
+	; Ground friction on X (air keeps full throw speed)
+	lda package_on_ground
+	beq @x_move
+	lda package_vel_x
+	beq @x_move
+	bpl @xfric_pos
+	clc
+	adc #FRICTION
+	bmi @xfric_set
+	lda #0
+	jmp @xfric_set
+@xfric_pos:
+	sec
+	sbc #FRICTION
+	bpl @xfric_set
+	lda #0
+@xfric_set:
+	sta package_vel_x
+@x_move:
+	jsr package_integrate_x
+
+	; Vertical: rest on ground unless falling / walked off
+	lda package_on_ground
+	beq @air
+	jsr package_probe_support
+	lda package_on_ground
+	beq @air
+	lda package_vel_y
+	bmi @air
+	lda #0
+	sta package_vel_y
+	sta package_y_sub
+	rts
+@air:
+	lda package_vel_y
+	clc
+	adc #GRAVITY
+	sta package_vel_y
+	bmi @y_int
+	cmp #MAX_FALL + 1
+	bcc @y_int
+	lda #MAX_FALL
+	sta package_vel_y
+@y_int:
+	jsr package_integrate_y
+
+	; Land only when moving down / resting
+	lda package_vel_y
+	bpl @land
+	rts
+@land:
+	lda package_y
+	clc
+	adc #PKG_H
+	sta check_y
+
+	cmp #GROUND_TOP_Y
+	bcc @plats
+	lda #GROUND_TOP_Y - PKG_H
+	sta package_y
+	jmp package_landed
+
+@plats:
+	jsr pkg_plat1_x_overlap
+	bcc @p2
+	lda check_y
+	cmp #136
+	bcc @p2
+	cmp #144
+	bcs @p2
+	lda #136 - PKG_H
+	sta package_y
+	jmp package_landed
+@p2:
+	jsr pkg_plat2_x_overlap
+	bcc @no_land
+	lda check_y
+	cmp #144
+	bcc @no_land
+	cmp #152
+	bcs @no_land
+	lda #144 - PKG_H
+	sta package_y
+	jmp package_landed
+@no_land:
+	rts
+
+package_landed:
+	lda #0
+	sta package_vel_y
+	sta package_y_sub
+	lda #1
+	sta package_on_ground
+	rts
+
+; Clear package_on_ground if feet no longer on a surface
+package_probe_support:
+	lda package_y
+	clc
+	adc #PKG_H
+	cmp #GROUND_TOP_Y
+	bne @plats
+	rts
+@plats:
+	cmp #136
+	bne @p2
+	jsr pkg_plat1_x_overlap
+	bcs @ok
+	lda #0
+	sta package_on_ground
+	rts
+@p2:
+	cmp #144
+	bne @off
+	jsr pkg_plat2_x_overlap
+	bcs @ok
+@off:
+	lda #0
+	sta package_on_ground
+@ok:
+	rts
+
+; Integrate package_x_sub += package_vel_x (1/16 px), update package_x_*
+package_integrate_x:
+	lda package_x_sub
+	clc
+	adc package_vel_x
+	sta temp
+	lda package_vel_x
+	bmi @sxn
+	lda #0
+	jmp @sxh
+@sxn:
+	lda #$FF
+@sxh:
+	adc #0
+	sta temp2
+@xge:
+	lda temp2
+	bmi @xlt
+	bne @xsub16
+	lda temp
+	cmp #16
+	bcc @xdone
+@xsub16:
+	lda temp
+	sec
+	sbc #16
+	sta temp
+	lda temp2
+	sbc #0
+	sta temp2
+	inc package_x_lo
+	bne @xge
+	inc package_x_hi
+	jmp @xge
+@xlt:
+	lda temp
+	clc
+	adc #16
+	sta temp
+	lda temp2
+	adc #0
+	sta temp2
+	lda package_x_lo
+	sec
+	sbc #1
+	sta package_x_lo
+	lda package_x_hi
+	sbc #0
+	sta package_x_hi
+	jmp @xge
+@xdone:
+	lda temp
+	sta package_x_sub
+	; clamp world X to [0, 500]
+	lda package_x_hi
+	bmi @xmin
+	bne @xhi
+	rts
+@xmin:
+	lda #0
+	sta package_x_hi
+	sta package_x_lo
+	sta package_x_sub
+	sta package_vel_x
+	rts
+@xhi:
+	cmp #2
+	bcc @xok
+	lda #1
+	sta package_x_hi
+	lda #244                 ; 500-256
+	sta package_x_lo
+	lda #0
+	sta package_x_sub
+	sta package_vel_x
+@xok:
+	rts
+
+; Integrate package_y_sub += package_vel_y
+package_integrate_y:
+	lda package_y_sub
+	clc
+	adc package_vel_y
+	sta temp
+	lda package_vel_y
+	bmi @syn
+	lda #0
+	jmp @syh
+@syn:
+	lda #$FF
+@syh:
+	adc #0
+	sta temp2
+@yge:
+	lda temp2
+	bmi @ylt
+	bne @ysub16
+	lda temp
+	cmp #16
+	bcc @ydone
+@ysub16:
+	lda temp
+	sec
+	sbc #16
+	sta temp
+	lda temp2
+	sbc #0
+	sta temp2
+	inc package_y
+	jmp @yge
+@ylt:
+	lda temp
+	clc
+	adc #16
+	sta temp
+	lda temp2
+	adc #0
+	sta temp2
+	dec package_y
+	jmp @yge
+@ydone:
+	lda temp
+	sta package_y_sub
+	rts
+
+; C=1 if package [x, x+PKG_W) overlaps platform 1 [160, 224)
+pkg_plat1_x_overlap:
+	lda package_x_hi
+	bne @no
+	lda package_x_lo
+	cmp #224
+	bcs @no
+	clc
+	adc #PKG_W
+	cmp #161
+	bcc @no
+	sec
+	rts
+@no:
+	clc
+	rts
+
+; C=1 if package overlaps platform 2 [320, 384)
+pkg_plat2_x_overlap:
+	lda package_x_hi
+	cmp #1
+	bne @no
+	lda package_x_lo
+	cmp #128
+	bcs @no
+	clc
+	adc #PKG_W
+	cmp #65
+	bcc @no
+	sec
+	rts
+@no:
+	clc
+	rts
+
 check_package:
 	lda has_package
 	bne @done
-	; package only in first screen (hi=0)
-	lda player_x_hi
-	bne @done
-	; player_x < pkg+PKG_W && player_x+PLAYER_W > pkg
-	lda player_x_lo
-	cmp #PKG_WORLD_X_L + PKG_W
-	bcs @done
-	clc
-	adc #PLAYER_W
-	cmp #PKG_WORLD_X_L
-	bcc @done
+	; Y overlap: player bottom > pkg top && player top < pkg bottom
 	lda player_y
 	clc
 	adc #PLAYER_H
-	cmp #PKG_WORLD_Y
+	cmp package_y
 	bcc @done
+	lda package_y
+	clc
+	adc #PKG_H
+	sta temp
 	lda player_y
-	cmp #PKG_WORLD_Y + PKG_H
+	cmp temp
 	bcs @done
+	; X: player_x < package_x + PKG_W
+	lda package_x_lo
+	clc
+	adc #PKG_W
+	sta temp
+	lda package_x_hi
+	adc #0
+	sta temp_hi
+	lda player_x_hi
+	cmp temp_hi
+	bcc @chk_right          ; player left of pkg right edge
+	bne @done
+	lda player_x_lo
+	cmp temp
+	bcs @done
+@chk_right:
+	; player_x + PLAYER_W > package_x
+	lda player_x_lo
+	clc
+	adc #PLAYER_W
+	sta temp
+	lda player_x_hi
+	adc #0
+	sta temp_hi
+	lda temp_hi
+	cmp package_x_hi
+	bcc @done
+	bne @pickup
+	lda temp
+	cmp package_x_lo
+	bcc @done
+	beq @done               ; edges touch only — need overlap
+@pickup:
 	lda #1
 	sta has_package
 @done:
@@ -1192,15 +1654,15 @@ draw_held_package:
 	jmp draw_package_sprites
 
 draw_world_package:
-	; screen x = pkg_x - scroll
-	lda #PKG_WORLD_X_L
+	; screen x = package world X - scroll (visible when result in 0..255)
+	lda package_x_lo
 	sec
 	sbc scroll_lo
 	sta temp
-	lda #PKG_WORLD_X_H
+	lda package_x_hi
 	sbc scroll_hi
-	bne @offscreen          ; hi != 0 → off left or far right
-	lda #PKG_WORLD_Y
+	bne @offscreen
+	lda package_y
 	sta temp2
 	jmp draw_package_sprites
 @offscreen:

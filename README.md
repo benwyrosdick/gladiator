@@ -41,11 +41,13 @@ make clean
 | **D-pad ← →** | Walk left / right (accelerates / coasts like Mario) |
 | **B** (hold) | Run (higher top speed) |
 | **A** | Jump (hold longer for higher jump, up to ~3×) |
+| **Select** | Drop package (while carrying) |
 
 1. Title screen: **VESYL SHIPPER** — press **Start**
 2. Pick up the package in the warehouse (walk into it)
 3. Head right (platforms optional), reach the delivery truck
-4. **DELIVERED!** — press **Start** for the title again
+4. **Select** drops the box where you stand (walk into it to pick up again)
+5. **DELIVERED!** — press **Start** for the title again
 
 ## Layout
 
