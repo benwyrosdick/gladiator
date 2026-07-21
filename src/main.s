@@ -45,10 +45,13 @@ T_GROUND_TOP  = $07
 T_GROUND_FILL = $08
 T_BRICK       = $09
 T_PLATFORM    = $0A
-T_BOX         = $0B          ; small package sprite (in-level)
-T_BOX0        = $0C          ; title flat box 6×3 (tiles $0C–$1D)
-T_TRUCK0      = $1E          ; delivery truck 6×3 (tiles $1E–$2F)
-T_FONT        = $30
+T_BOX         = $0B          ; package TL (12×12 uses $0B–$0E)
+T_BOX_TR      = $0C
+T_BOX_BL      = $0D
+T_BOX_BR      = $0E
+T_BOX0        = $0F          ; title flat box 6×3 (tiles $0F–$20)
+T_TRUCK0      = $21          ; delivery truck 6×3 (tiles $21–$32)
+T_FONT        = $33
 ; font: 0=space, 1=A … 26=Z, 27=!
 
 PLAYER_IDLE_0 = T_PLAYER0
@@ -81,8 +84,9 @@ GROUND_TOP_Y = 168          ; pixel Y of ground surface (row 21)
 
 PKG_WORLD_X_L = 80          ; package world X (past spawn so not auto-picked)
 PKG_WORLD_X_H = 0
-PKG_WORLD_Y   = 152         ; 16×16 package sits on ground (top at 168-16)
-PKG_H         = 16
+PKG_WORLD_Y   = 156         ; 12×12 package sits on ground (top at 168-12)
+PKG_W         = 12
+PKG_H         = 12
 
 ; Truck BG tiles: NT1 cols 22–27 → world X 432–480 (hi=$01)
 TRUCK_LEFT_L  = $B0         ; 256+176=432
@@ -171,10 +175,13 @@ player_s_3_walk:
 	.byte $FF,$81,$BD,$BD,$FF,$DB,$DB,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
 ; $0A platform — full 8×8 solid ledge (white top, blue body; always visible on black sky)
 	.byte $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF
-; $0B package TL (16×16 = this + TR/BL/BR drawn as 4 sprites)
-; 0=clear  1=label  2=cardboard  3=red tape/outline
-	.byte $7F,$40,$5F,$51,$51,$5F,$40,$7F,$00,$3F,$20,$2E,$2E,$20,$3F,$00
-; $0C–$1D title flat shipping box (6×3 tiles) — front view
+; $0B–$0E package 12×12 (TL/TR/BL/BR). 0=clear 1=white label 2=cardboard 3=outline
+; Label is 4×6 at (2,2) inside the box
+	.byte $FF,$80,$BC,$BC,$BC,$BC,$BC,$BC,$FF,$FF,$C3,$C3,$C3,$C3,$C3,$C3  ; TL
+	.byte $F0,$10,$10,$10,$10,$10,$10,$10,$F0,$F0,$F0,$F0,$F0,$F0,$F0,$F0  ; TR
+	.byte $80,$80,$80,$FF,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$00,$00,$00,$00  ; BL
+	.byte $10,$10,$10,$F0,$00,$00,$00,$00,$F0,$F0,$F0,$F0,$00,$00,$00,$00  ; BR
+; $0F–$20 title flat shipping box (6×3 tiles) — front view
 ; 0=black outline/icons  1=light panel+label  2=cardboard  3=red tape/border
 	.byte $00,$00,$3F,$3F,$3F,$3F,$3F,$3F,$00,$00,$00,$00,$00,$00,$00,$00  ; 0
 	.byte $00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$F8,$F8,$88,$D8,$D8,$F8  ; 1
@@ -194,7 +201,7 @@ player_s_3_walk:
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$01,$6D,$45,$6D,$6D,$01,$00,$00  ; 15
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$01,$45,$39,$39,$45,$01,$00,$00  ; 16
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$6C,$00,$6C,$6C,$00,$00,$00  ; 17
-; $1E–$2F delivery truck 6×3 — cute blue van (ref style), facing right
+; $21–$32 delivery truck 6×3 — cute blue van (ref style), facing right
 ; 0=black outline/tires  1=blue body  2=white  3=red accents
 	.byte $00,$00,$00,$1F,$18,$18,$1C,$1C,$00,$00,$00,$00,$07,$07,$03,$03  ; 0
 	.byte $00,$00,$00,$FF,$00,$00,$3C,$3C,$00,$00,$00,$00,$FF,$FF,$FF,$FF  ; 1
@@ -214,7 +221,7 @@ player_s_3_walk:
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 15
 	.byte $00,$00,$04,$00,$00,$00,$00,$00,$00,$0E,$0E,$0E,$00,$00,$00,$00  ; 16
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 17
-; $30+ font: space, A-Z, !
+; $33+ font: space, A-Z, !
 font_space:
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 	.byte $38,$44,$44,$7C,$44,$44,$44,$00,$38,$44,$44,$7C,$44,$44,$44,$00 ; A
@@ -298,7 +305,7 @@ bg_palette:
 
 spr_palette:
 	.byte $0F, $27, $17, $30   ; player
-	.byte $0F, $37, $27, $16   ; package light/body/red
+	.byte $0F, $30, $27, $16   ; package: white label, cardboard, red outline
 	.byte $0F, $00, $10, $20
 	.byte $0F, $21, $30, $16   ; truck
 
@@ -988,9 +995,9 @@ check_package:
 	; package only in first screen (hi=0)
 	lda player_x_hi
 	bne @done
-	; player_x < pkg+16 && player_x+16 > pkg  (generous box)
+	; player_x < pkg+PKG_W && player_x+PLAYER_W > pkg
 	lda player_x_lo
-	cmp #PKG_WORLD_X_L + 16
+	cmp #PKG_WORLD_X_L + PKG_W
 	bcs @done
 	clc
 	adc #PLAYER_W
@@ -1105,7 +1112,7 @@ draw_play_sprites:
 @done:
 	rts
 
-; 16×16 package: 4 sprites of T_BOX (TL/TR/BL/BR via H/V flip)
+; 12×12 package: 4 sprites (TL/TR/BL/BR tiles). Transparent padding in TR/BL/BR.
 ; temp = screen X of top-left, temp2 = screen Y of top-left
 draw_package_sprites:
 	ldx oam_idx
@@ -1118,36 +1125,36 @@ draw_package_sprites:
 	sta oam_shadow+2, x
 	lda temp
 	sta oam_shadow+3, x
-	; TR (H-flip)
+	; TR
 	lda temp2
 	sta oam_shadow+4, x
-	lda #T_BOX
+	lda #T_BOX_TR
 	sta oam_shadow+5, x
-	lda #%01000001          ; H-flip, pal 1
+	lda #%00000001
 	sta oam_shadow+6, x
 	lda temp
 	clc
 	adc #8
 	sta oam_shadow+7, x
-	; BL (V-flip)
+	; BL
 	lda temp2
 	clc
 	adc #8
 	sta oam_shadow+8, x
-	lda #T_BOX
+	lda #T_BOX_BL
 	sta oam_shadow+9, x
-	lda #%10000001          ; V-flip, pal 1
+	lda #%00000001
 	sta oam_shadow+10, x
 	lda temp
 	sta oam_shadow+11, x
-	; BR (H+V flip)
+	; BR
 	lda temp2
 	clc
 	adc #8
 	sta oam_shadow+12, x
-	lda #T_BOX
+	lda #T_BOX_BR
 	sta oam_shadow+13, x
-	lda #%11000001          ; H+V flip, pal 1
+	lda #%00000001
 	sta oam_shadow+14, x
 	lda temp
 	clc
@@ -1160,10 +1167,10 @@ draw_package_sprites:
 	rts
 
 draw_held_package:
-	; Carry above head, slightly forward by facing
+	; Carry above head, slightly forward by facing (12×12 centered on 16px body)
 	lda player_y
 	sec
-	sbc #14
+	sbc #12
 	bcs @yok
 	lda #0
 @yok:
@@ -1172,12 +1179,12 @@ draw_held_package:
 	bne @face_l
 	lda screen_x
 	clc
-	adc #4
+	adc #2                  ; (16-12)/2
 	jmp @xset
 @face_l:
 	lda screen_x
 	sec
-	sbc #4
+	sbc #2
 	bcs @xset
 	lda #0
 @xset:
