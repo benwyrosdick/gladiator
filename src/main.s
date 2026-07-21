@@ -69,8 +69,13 @@ GRAVITY      = 1
 ; Full hold peak ≈ 9+8+…+1 = 45 px (~3× old 15 px from JUMP_V=-5)
 JUMP_V       = $F7          ; -9 signed (max jump impulse)
 MAX_FALL     = 6
-WALK_SPEED   = 2
-RUN_SPEED    = 4              ; hold B to run
+; Horizontal motion (Mario-style accel / friction), units = 1/16 pixel
+; Peak speeds ≈ walk 2px/f, run 4px/f
+WALK_MAX     = 32
+RUN_MAX      = 64
+ACCEL        = 3              ; speed up when holding a direction
+FRICTION     = 2              ; slow down when no input
+SKID         = 5              ; brake faster when reversing
 CAMERA_OFF   = 96
 LEVEL_W_PX_L = $00          ; level width 512 = $0200
 LEVEL_W_PX_H = $02
@@ -108,8 +113,10 @@ scroll_hi:         .res 1
 ppuctrl_nt:        .res 1   ; PPUCTRL with nametable bits
 player_x_lo:       .res 1
 player_x_hi:       .res 1
+player_x_sub:      .res 1   ; subpixel 0–15 (1/16 px)
 player_y:          .res 1
 screen_x:          .res 1
+vel_x:             .res 1   ; signed, 1/16 px per frame
 vel_y:             .res 1   ; signed
 on_ground:         .res 1
 anim_frame:        .res 1
@@ -506,7 +513,9 @@ enter_play:
 	sta scroll_lo
 	sta scroll_hi
 	sta has_package
+	sta vel_x
 	sta vel_y
+	sta player_x_sub
 	sta anim_frame
 	sta facing
 	sta player_x_hi
@@ -625,68 +634,184 @@ plat2_x_overlap:
 	clc
 	rts
 
+; Mario-style run: accelerate / skid / friction, then integrate subpixels.
+; vel_x = signed speed in 1/16 px per frame; player_x_sub = 0..15 fraction.
 apply_horizontal:
-	; speed: walk, or run while B held
-	lda #WALK_SPEED
-	sta temp
+	lda #WALK_MAX
+	sta temp                  ; max |vel|
 	lda pad1
 	and #BTN_B
-	beq @spd
-	lda #RUN_SPEED
+	beq @gotmax
+	lda #RUN_MAX
 	sta temp
-@spd:
+@gotmax:
+
 	lda pad1
 	and #BTN_RIGHT
-	beq @no_r
-	lda #0
-	sta facing
-	lda player_x_lo
-	clc
-	adc temp
-	sta player_x_lo
-	lda player_x_hi
-	adc #0
-	sta player_x_hi
-@no_r:
+	bne @right
 	lda pad1
 	and #BTN_LEFT
-	beq @no_l
+	bne @left
+	jmp @friction
+
+@right:
+	lda #0
+	sta facing
+	lda vel_x
+	bmi @skid_r
+	clc
+	adc #ACCEL
+	bmi @rmax                 ; overflow → clamp
+	cmp temp
+	bcc @rset
+	beq @rset
+@rmax:
+	lda temp
+@rset:
+	sta vel_x
+	jmp @integrate
+@skid_r:
+	clc
+	adc #SKID
+	sta vel_x
+	jmp @integrate
+
+@left:
 	lda #1
 	sta facing
+	lda vel_x
+	beq @acc_l
+	bpl @skid_l
+@acc_l:
+	lda vel_x
+	sec
+	sbc #ACCEL
+	sta vel_x
+	lda temp
+	eor #$FF
+	clc
+	adc #1
+	sta temp2                 ; -max
+	lda vel_x
+	cmp temp2
+	bcs @integrate
+	lda temp2
+	sta vel_x
+	jmp @integrate
+@skid_l:
+	lda vel_x
+	sec
+	sbc #SKID
+	sta vel_x
+	jmp @integrate
+
+@friction:
+	lda vel_x
+	beq @integrate
+	bpl @fpos
+	clc
+	adc #FRICTION
+	bmi @fset
+	lda #0
+	jmp @fset
+@fpos:
+	sec
+	sbc #FRICTION
+	bpl @fset
+	lda #0
+@fset:
+	sta vel_x
+
+@integrate:
+	; signed 16-bit: (hi:lo) = player_x_sub + vel_x  (subpixel)
+	lda player_x_sub
+	clc
+	adc vel_x
+	sta temp                  ; lo
+	lda vel_x
+	bmi @signneg
+	lda #0
+	jmp @addhi
+@signneg:
+	lda #$FF
+@addhi:
+	adc #0
+	sta temp2                 ; hi (sign-extended carry)
+
+	; while (hi:lo) >= 16: lo-=16, x++
+@norm_ge:
+	lda temp2
+	bmi @norm_lt              ; negative → need +16 path
+	bne @do_sub16             ; hi>0 ⇒ definitely >= 16
+	lda temp
+	cmp #16
+	bcc @norm_done
+@do_sub16:
+	lda temp
+	sec
+	sbc #16
+	sta temp
+	lda temp2
+	sbc #0
+	sta temp2
+	inc player_x_lo
+	bne @norm_ge
+	inc player_x_hi
+	jmp @norm_ge
+
+	; while (hi:lo) < 0: lo+=16, x--
+@norm_lt:
+	lda temp
+	clc
+	adc #16
+	sta temp
+	lda temp2
+	adc #0
+	sta temp2
 	lda player_x_lo
 	sec
-	sbc temp
+	sbc #1
 	sta player_x_lo
 	lda player_x_hi
 	sbc #0
 	sta player_x_hi
-	bcs @no_l
-	lda #0
-	sta player_x_lo
-	sta player_x_hi
-@no_l:
-	; clamp to [8, 496]
+	jmp @norm_ge
+
+@norm_done:
+	lda temp
+	sta player_x_sub
+
+	; clamp world X to [8, 496]
 	lda player_x_hi
-	bne @hi
+	bmi @hitmin               ; went past 0
+	bne @chi
 	lda player_x_lo
 	cmp #8
-	bcs @max
+	bcs @done
+@hitmin:
+	lda #0
+	sta player_x_hi
 	lda #8
 	sta player_x_lo
-	jmp @max
-@hi:
+	lda #0
+	sta player_x_sub
+	sta vel_x
+	rts
+@chi:
 	cmp #2
-	bcs @setmax
-	; hi == 1: max lo = 496-256 = 240
+	bcs @hitmax
 	lda player_x_lo
 	cmp #241
-	bcc @max
-@setmax:
-	lda #240
-	sta player_x_lo
+	bcc @done
+@hitmax:
 	lda #1
 	sta player_x_hi
-@max:
+	lda #240
+	sta player_x_lo
+	lda #0
+	sta player_x_sub
+	sta vel_x
+@done:
 	rts
 
 apply_jump:
@@ -894,21 +1019,11 @@ draw_play_sprites:
 	lda #0
 	sta oam_idx
 
-	; choose metasprite
+	; choose metasprite (walk if any horizontal velocity)
 	lda facing
 	bne @face_l
-	; moving?
-	lda player_x_lo
-	cmp old_x_lo
-	bne @walk_r
-	lda player_x_hi
-	cmp old_x_hi
-	bne @walk_r
-	lda #<player_idle_metasprite
-	sta metasprite_ptr_lo
-	lda #>player_idle_metasprite
-	sta metasprite_ptr_hi
-	jmp @draw_p
+	lda vel_x
+	beq @idle_r
 @walk_r:
 	inc anim_frame
 	lda anim_frame
@@ -928,18 +1043,15 @@ draw_play_sprites:
 	lda #>player_walk1_metasprite
 	sta metasprite_ptr_hi
 	jmp @draw_p
-@face_l:
-	lda player_x_lo
-	cmp old_x_lo
-	bne @walk_l
-	lda player_x_hi
-	cmp old_x_hi
-	bne @walk_l
-	lda #<player_idle_flip
+@idle_r:
+	lda #<player_idle_metasprite
 	sta metasprite_ptr_lo
-	lda #>player_idle_flip
+	lda #>player_idle_metasprite
 	sta metasprite_ptr_hi
 	jmp @draw_p
+@face_l:
+	lda vel_x
+	beq @idle_l
 @walk_l:
 	inc anim_frame
 	lda anim_frame
@@ -957,6 +1069,12 @@ draw_play_sprites:
 	lda #<player_walk1_flip
 	sta metasprite_ptr_lo
 	lda #>player_walk1_flip
+	sta metasprite_ptr_hi
+	jmp @draw_p
+@idle_l:
+	lda #<player_idle_flip
+	sta metasprite_ptr_lo
+	lda #>player_idle_flip
 	sta metasprite_ptr_hi
 @draw_p:
 	jsr draw_metasprite

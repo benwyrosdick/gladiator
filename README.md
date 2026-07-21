@@ -27,8 +27,8 @@ make clean
 | Control | Action |
 |---------|--------|
 | **Start** | Begin from title / return from win |
-| **D-pad ← →** | Walk left / right |
-| **B** (hold) | Run |
+| **D-pad ← →** | Walk left / right (accelerates / coasts like Mario) |
+| **B** (hold) | Run (higher top speed) |
 | **A** | Jump (hold longer for higher jump, up to ~3×) |
 
 1. Title screen: **VESYL SHIPPER** — press **Start**
