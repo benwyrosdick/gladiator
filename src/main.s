@@ -47,13 +47,8 @@ T_BRICK       = $09
 T_PLATFORM    = $0A
 T_BOX         = $0B          ; small package sprite (in-level)
 T_BOX0        = $0C          ; title flat box 6×3 (tiles $0C–$1D)
-T_TRUCK0      = $1E
-T_TRUCK1      = $1F
-T_TRUCK2      = $20
-T_TRUCK3      = $21
-T_TRUCK4      = $22
-T_TRUCK5      = $23
-T_FONT        = $24
+T_TRUCK0      = $1E          ; delivery truck 6×3 (tiles $1E–$2F)
+T_FONT        = $30
 ; font: 0=space, 1=A … 26=Z, 27=!
 
 PLAYER_IDLE_0 = T_PLAYER0
@@ -196,14 +191,27 @@ player_s_3_walk:
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$01,$6D,$45,$6D,$6D,$01,$00,$00  ; 15
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$01,$45,$39,$39,$45,$01,$00,$00  ; 16
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$6C,$00,$6C,$6C,$00,$00,$00  ; 17
-; $1E–$23 truck
-	.byte $00,$1F,$3F,$3F,$3F,$3F,$3F,$3F,$00,$1F,$3F,$3F,$3F,$3F,$3F,$3F
-	.byte $00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF
-	.byte $00,$F8,$FC,$FE,$FE,$1E,$1E,$1E,$00,$F8,$FC,$FE,$FE,$1E,$1E,$1E
-	.byte $3F,$3F,$18,$3C,$3C,$18,$00,$00,$3F,$3F,$18,$3C,$3C,$18,$00,$00
-	.byte $FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00
-	.byte $1E,$1E,$18,$3C,$3C,$18,$00,$00,$1E,$1E,$18,$3C,$3C,$18,$00,$00
-; $1E+ font: space, A-Z, !
+; $1E–$2F delivery truck 6×3 — cute blue van (ref style), facing right
+; 0=black outline/tires  1=blue body  2=white  3=red accents
+	.byte $00,$00,$00,$1F,$18,$18,$1C,$1C,$00,$00,$00,$00,$07,$07,$03,$03  ; 0
+	.byte $00,$00,$00,$FF,$00,$00,$3C,$3C,$00,$00,$00,$00,$FF,$FF,$FF,$FF  ; 1
+	.byte $00,$00,$00,$FF,$00,$00,$3C,$3C,$00,$00,$00,$00,$FF,$FF,$FF,$FF  ; 2
+	.byte $00,$00,$00,$F8,$19,$19,$39,$39,$00,$00,$00,$00,$E0,$E0,$C0,$C0  ; 3
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF  ; 4
+	.byte $00,$00,$00,$00,$20,$28,$28,$28,$00,$00,$00,$00,$C0,$C0,$C0,$C0  ; 5
+	.byte $1C,$1C,$18,$1F,$18,$00,$00,$3F,$03,$03,$17,$13,$17,$00,$00,$3F  ; 6
+	.byte $3C,$3C,$00,$FF,$00,$00,$00,$FF,$FF,$FF,$FF,$C3,$FF,$00,$00,$FF  ; 7
+	.byte $3C,$3C,$00,$FF,$00,$00,$00,$FF,$FF,$FF,$FF,$C3,$FF,$00,$00,$FF  ; 8
+	.byte $39,$39,$19,$F9,$19,$00,$00,$FF,$C0,$C0,$E0,$C0,$E0,$00,$00,$FF  ; 9
+	.byte $00,$FF,$FF,$FF,$FF,$00,$00,$FF,$FF,$00,$00,$00,$00,$00,$00,$FF  ; 10
+	.byte $28,$E0,$E0,$E8,$E0,$00,$00,$F8,$C0,$00,$00,$08,$00,$00,$00,$F8  ; 11
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 12
+	.byte $00,$00,$08,$00,$00,$00,$00,$00,$00,$1C,$1C,$1C,$00,$00,$00,$00  ; 13
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 14
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 15
+	.byte $00,$00,$04,$00,$00,$00,$00,$00,$00,$0E,$0E,$0E,$00,$00,$00,$00  ; 16
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 17
+; $30+ font: space, A-Z, !
 font_space:
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 	.byte $38,$44,$44,$7C,$44,$44,$44,$00,$38,$44,$44,$7C,$44,$44,$44,$00 ; A
@@ -283,13 +291,13 @@ bg_palette:
 	.byte $0F, $21, $11, $30   ; sky / white text
 	.byte $0F, $37, $27, $16   ; package: light card, body, red tape
 	.byte $0F, $00, $10, $20   ; asphalt gray
-	.byte $0F, $02, $12, $22   ; truck blue
+	.byte $0F, $21, $30, $16   ; truck: blue body, white, red
 
 spr_palette:
 	.byte $0F, $27, $17, $30   ; player
 	.byte $0F, $37, $27, $16   ; package light/body/red
 	.byte $0F, $00, $10, $20
-	.byte $0F, $02, $12, $22
+	.byte $0F, $21, $30, $16   ; truck
 
 ; Strings: tile indices relative to T_FONT (0=space, 1=A…), $FF end
 ; Helper: letter L means tile (L-'A'+1)
@@ -1368,28 +1376,69 @@ draw_platform_tiles:
 	rts
 
 draw_truck:
-	; world cols 56-58 → NT1 col 24-26, rows 19-20 (just above ground)
-	; $2400 + 19*32 + 24 = $2400 + $260 + $18 = $2678
+	; 6×3 truck just above ground (row 21). NT1 cols 22–27, rows 18–20.
+	; world X ≈ 432–479.  $2400 + 18*32 + 22 = $2656
+	bit PPUSTATUS
 	lda #$26
 	sta PPUADDR
-	lda #$78
+	lda #$56
 	sta PPUADDR
-	lda #T_TRUCK0
+	ldx #0
+@r0:
+	txa
+	clc
+	adc #T_TRUCK0
 	sta PPUDATA
-	lda #T_TRUCK1
-	sta PPUDATA
-	lda #T_TRUCK2
-	sta PPUDATA
-	; row 20: $2400 + 20*32 + 24 = $2400+$280+$18 = $2698
+	inx
+	cpx #6
+	bne @r0
+
 	lda #$26
 	sta PPUADDR
-	lda #$98
+	lda #$76                ; row 19, col 22
 	sta PPUADDR
-	lda #T_TRUCK3
+@r1:
+	txa
+	clc
+	adc #T_TRUCK0
 	sta PPUDATA
-	lda #T_TRUCK4
+	inx
+	cpx #12
+	bne @r1
+
+	lda #$26
+	sta PPUADDR
+	lda #$96                ; row 20, col 22
+	sta PPUADDR
+@r2:
+	txa
+	clc
+	adc #T_TRUCK0
 	sta PPUDATA
-	lda #T_TRUCK5
+	inx
+	cpx #18
+	bne @r2
+
+	; Attribute palette 3 (truck) for that region on NT1
+	; rows 16–19 → attr row 4; rows 20–23 → attr row 5
+	; cols 20–23 → attr col 5; cols 24–27 → attr col 6
+	; NT1 attrs at $27C0; offset row*8+col
+	; row4 col5 = 37 = $25; row4 col6 = 38; row5 col5 = 45; row5 col6 = 46
+	lda #$27
+	sta PPUADDR
+	lda #$E5                ; $27C0 + $25
+	sta PPUADDR
+	lda #$FF                ; all 2×2 blocks → palette 3
+	sta PPUDATA
+	sta PPUDATA
+	; skip to row5 col5: need +6 more from current (wrote 2, at offset 39)
+	; easier: set addresses separately
+	lda #$27
+	sta PPUADDR
+	lda #$ED                ; $27C0 + 45 = $27ED
+	sta PPUADDR
+	lda #$FF
+	sta PPUDATA
 	sta PPUDATA
 	rts
 
