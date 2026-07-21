@@ -27,7 +27,7 @@ make clean
 | Control | Action |
 |---------|--------|
 | **Start** | Begin from title / return from win |
-| **D-pad L/R** | Walk |
+| **D-pad ← →** | Walk left / right |
 | **A** | Jump |
 
 1. Title screen: **VESYL SHIPPER** — press **Start**

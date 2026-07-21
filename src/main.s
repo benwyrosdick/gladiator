@@ -22,6 +22,17 @@ STATE_TITLE = 0
 STATE_PLAY  = 1
 STATE_WIN   = 2
 
+; Controller bits after read_controller (ROL serial read):
+; bit7=A bit6=B bit5=Select bit4=Start bit3=Up bit2=Down bit1=Left bit0=Right
+BTN_A      = $80
+BTN_B      = $40
+BTN_SELECT = $20
+BTN_START  = $10
+BTN_UP     = $08
+BTN_DOWN   = $04
+BTN_LEFT   = $02
+BTN_RIGHT  = $01
+
 ; Tile indices (order in tiles: blob)
 T_SKY         = $00
 T_PLAYER0     = $01
@@ -378,7 +389,7 @@ update_title:
 	jsr hide_all_sprites
 	; Start edge?
 	lda pad1_edge
-	and #$08
+	and #BTN_START
 	beq @done
 	jsr enter_play
 @done:
@@ -550,7 +561,7 @@ probe_support:
 
 apply_horizontal:
 	lda pad1
-	and #$80                ; Right
+	and #BTN_RIGHT
 	beq @no_r
 	lda #0
 	sta facing
@@ -563,7 +574,7 @@ apply_horizontal:
 	sta player_x_hi
 @no_r:
 	lda pad1
-	and #$40                ; Left
+	and #BTN_LEFT
 	beq @no_l
 	lda #1
 	sta facing
@@ -605,7 +616,7 @@ apply_horizontal:
 
 apply_jump:
 	lda pad1_edge
-	and #$01                ; A
+	and #BTN_A
 	beq @done
 	lda on_ground
 	beq @done
@@ -985,7 +996,7 @@ enter_win:
 update_win:
 	jsr hide_all_sprites
 	lda pad1_edge
-	and #$08
+	and #BTN_START
 	beq @done
 	jsr enter_title
 @done:
@@ -1344,6 +1355,8 @@ wait_vblank:
 	bpl wait_vblank
 	rts
 
+; Read controller 1. After 8 ROL shifts:
+; bit7=A, bit6=B, bit5=Select, bit4=Start, bit3=Up, bit2=Down, bit1=Left, bit0=Right
 read_controller:
 	lda pad1
 	sta pad1_prev
@@ -1357,11 +1370,11 @@ read_controller:
 @loop:
 	lda $4016
 	and #1
-	cmp #1
+	cmp #1                    ; C = pressed
 	rol pad1
 	dex
 	bne @loop
-	; edge = pad1 & ~pad1_prev
+	; edge = newly pressed this frame
 	lda pad1_prev
 	eor #$FF
 	and pad1

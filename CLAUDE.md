@@ -24,8 +24,11 @@ make clean && make
 | Control | Action |
 |---------|--------|
 | Start | Title/Win transitions |
-| L/R | Move |
+| D-pad L/R | Move |
 | A | Jump |
+
+Controller bit masks after `read_controller` (ROL serial):  
+`A=$80 B=$40 Select=$20 Start=$10 Up=$08 Down=$04 Left=$02 Right=$01`
 
 **Objective**: Pick up package near warehouse start, carry to truck at right end of level.
 
