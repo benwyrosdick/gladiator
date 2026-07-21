@@ -8,7 +8,7 @@ A simple NES side-scroller written in 6502 assembly (cc65). Carry a package from
 
 - **cc65** (`ca65`, `ld65`) on your PATH  
   - macOS: `brew install cc65`
-- An NES emulator (Mesen, FCEUX, Nestopia UE, …)
+- An NES emulator (RetroArch + Nestopia/Mesen, or Mesen / FCEUX / Nestopia UE standalone)
 
 ## Build
 
@@ -16,12 +16,23 @@ A simple NES side-scroller written in 6502 assembly (cc65). Carry a package from
 make
 ```
 
-Produces `build/vesyl_shipper.nes`.
+Produces `build/vesyl_shipper.nes` and symlinks it into RetroArch’s content folder:
+
+`~/Games/roms/nes/vesyl_shipper.nes`
+
+(that path matches `rgui_browser_directory` in `~/.config/retroarch/retroarch.cfg`).
 
 ```sh
+make install   # symlink only (also runs as part of make)
+make run       # build + launch in RetroArch (Nestopia)
+make run RA_CORE=mesen_libretro   # use Mesen instead
 make clean
 ```
 
+### RetroArch UI
+
+1. **Load Content** → open `Games/roms/nes` → `vesyl_shipper.nes`
+2. Pick core **Nestopia** or **Mesen** if prompted
 ## How to play
 
 | Control | Action |

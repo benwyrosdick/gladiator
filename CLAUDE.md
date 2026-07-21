@@ -54,7 +54,7 @@ Controller bit masks after `read_controller` (ROL serial):
 - **Scroll**: `scroll_lo/hi`; NMI writes `PPUCTRL` + `PPUSCROLL`
 - **Physics**: gravity, jump (`JUMP_V`), ground at `GROUND_TOP_Y` (168), two platforms
 - **Package**: `has_package`; world sprite until pickup, then carried sprite
-- **Truck zone**: world X ≈ 400–480 with package → win
+- **Truck zone**: player AABB overlaps truck world X 432–480 with package → win
 - **Player**: original 16×16 metasprites (idle/walk, optional flip)
 
 ### Zero page highlights

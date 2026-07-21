@@ -1,5 +1,5 @@
 # VESYL Shipper NES — requires cc65 (ca65, ld65) and python3
-# make / make clean
+# make / make clean / make install / make run
 
 NAME  = vesyl_shipper
 CC65 ?= ca65
@@ -13,7 +13,12 @@ NES   = $(BUILD)/$(NAME).nes
 CFG   = nrom128.cfg
 HDR   = $(BUILD)/header.bin
 
-all: $(NES)
+# RetroArch: rgui_browser_directory is ~/Games/roms (see retroarch.cfg)
+RA_ROMS ?= $(HOME)/Games/roms
+RA_NES  = $(RA_ROMS)/nes
+RA_CORE ?= nestopia_libretro
+
+all: $(NES) install
 
 $(OBJ): $(SRC)
 	mkdir -p $(BUILD)
@@ -31,7 +36,18 @@ $(NES): $(PRG) $(HDR)
 	cat $(HDR) $(PRG) > $(NES)
 	@echo "Built $(NES)"
 
+# Symlink into RetroArch content dir so Load Content → nes/ always sees latest build
+install: $(NES)
+	mkdir -p $(RA_NES)
+	ln -sfr $(NES) $(RA_NES)/$(NAME).nes
+	@echo "Available in RetroArch: $(RA_NES)/$(NAME).nes"
+
+# Build and launch with Nestopia (override: make run RA_CORE=mesen_libretro)
+run: $(NES)
+	retroarch -L $(RA_CORE) $(NES)
+
 clean:
 	rm -rf $(BUILD)
+	rm -f $(RA_NES)/$(NAME).nes
 
-.PHONY: all clean
+.PHONY: all install run clean

@@ -83,10 +83,11 @@ PKG_WORLD_X_L = 48          ; package world X
 PKG_WORLD_X_H = 0
 PKG_WORLD_Y   = 152         ; on ground (16px tall box sprite uses 8px tile)
 
-TRUCK_ZONE_L  = $80         ; world X low  for drop-off start (~400)
-TRUCK_ZONE_H  = $01
-TRUCK_ZONE_R_L = $E0        ; end ~480
-TRUCK_ZONE_R_H = $01
+; Truck BG tiles: NT1 cols 22–27 → world X 432–480 (hi=$01)
+TRUCK_LEFT_L  = $B0         ; 256+176=432
+TRUCK_LEFT_H  = $01
+TRUCK_RIGHT_L = $E0         ; 256+224=480
+TRUCK_RIGHT_H = $01
 
 ; -------------------------
 ; Zero page
@@ -1007,16 +1008,18 @@ check_package:
 	rts
 
 check_truck:
+	; Win when carrying package and player AABB overlaps truck
+	; player: [x, x+PLAYER_W), truck: [432, 480)
+	; => player_x >= 432-16 (416) and player_x < 480
 	lda has_package
 	beq @done
-	; zone: world X 400..480 (hi=1, lo 144..224)
 	lda player_x_hi
-	cmp #1
+	cmp #TRUCK_LEFT_H
 	bne @done
 	lda player_x_lo
-	cmp #144                 ; 256+144=400
+	cmp #TRUCK_LEFT_L - PLAYER_W   ; 416: player right edge at truck left
 	bcc @done
-	cmp #224                 ; 256+224=480
+	cmp #TRUCK_RIGHT_L               ; 480: past truck right edge
 	bcs @done
 	jsr enter_win
 @done:
