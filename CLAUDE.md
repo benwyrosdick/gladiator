@@ -4,76 +4,77 @@ Guidance for AI agents working on this repository.
 
 ## Project
 
-Homebrew NES game in 6502 assembly (cc65). Learning project for NES development.
+**VESYL Shipper** — homebrew NES side-scroller in 6502 assembly (cc65).
 
-- **Mapper**: NROM-128 (Mapper 0) — 16KB PRG, CHR-RAM
-- **Toolchain**: ca65 / ld65
-- **Output**: `build/gladiator.nes`
+- **Mapper**: NROM-128 (Mapper 0), 16KB PRG, CHR-RAM, **vertical mirroring** (horizontal scroll)
+- **Output**: `build/vesyl_shipper.nes`
+- **Toolchain**: ca65 / ld65, python3 (iNES header)
 
 ## Commands
 
 ```bash
-make              # build ROM
+make
 make clean && make
 ```
 
-Run the ROM in Mesen, FCEUX, or Nestopia UE.
+## Game flow
+
+`TITLE` → Start → `PLAY` → deliver package → `WIN` → Start → `TITLE`
+
+| Control | Action |
+|---------|--------|
+| Start | Title/Win transitions |
+| L/R | Move |
+| A | Jump |
+
+**Objective**: Pick up package near warehouse start, carry to truck at right end of level.
 
 ## Layout
 
 | Path | Role |
 |------|------|
-| `src/main.s` | All game code, tiles, palettes, map, logic |
-| `nrom128.cfg` | Linker memory map |
-| `Makefile` | Build: assemble → link → iNES header → `.nes` |
-| `nes_assembly_guide.md` | NES/6502 reference (not project-specific) |
+| `src/main.s` | All code, CHR tiles, strings, level draw |
+| `nrom128.cfg` | Memory map |
+| `Makefile` | `NAME = vesyl_shipper`; header flags vertical mirror |
 
-## Memory
+## Architecture
 
-- **Zero page**: `frame_flag`, `pad1`, `sprite_x/y`, `anim_frame`, metasprite pointer
-- **OAM shadow `$0200`**: 256-byte sprite buffer; NMI does DMA via `$4014`
-- **PRG `$C000–$FFFF`**: code + RODATA (single 16KB bank)
+### States (`game_state`)
 
-## What exists today
+- `STATE_TITLE` (0) — box art, “VESYL SHIPPER”, “PRESS START”
+- `STATE_PLAY` (1) — side-scroll level
+- `STATE_WIN` (2) — “DELIVERED!”
 
-- 16×16 player metasprite (4 hardware sprites), idle + two walk frames
-- D-pad movement with axis-separated collision (screen edges + solid tiles)
-- Solid tiles: `WALL_TILE`, `PILLAR_TILE` (see `player_hits_solid` / `is_solid_at`)
-- Walk anim only when position actually changes; rate ÷8 frames
-- Arena background (walls, floor, pillars) loaded from `arena_map` (16×32)
-- CHR-RAM tiles uploaded at reset; Roman-ish palettes
+### Play systems
 
-### Tile indices (`src/main.s`)
+- **World X**: 16-bit `player_x_lo/hi` (level ~512 px / 2 nametables)
+- **Scroll**: `scroll_lo/hi`; NMI writes `PPUCTRL` + `PPUSCROLL`
+- **Physics**: gravity, jump (`JUMP_V`), ground at `GROUND_TOP_Y` (168), two platforms
+- **Package**: `has_package`; world sprite until pickup, then carried sprite
+- **Truck zone**: world X ≈ 400–480 with package → win
+- **Player**: original 16×16 metasprites (idle/walk, optional flip)
 
-Order in the `tiles:` … `tiles_end:` blob must match these constants:
+### Zero page highlights
 
-- `BG_TILE_IDX`, `PLAYER_IDLE_0`–`3`, `PLAYER_WALK_2`–`3`
-- `WALL_TILE`, `FLOOR_TILE`, `PILLAR_TILE`
+`game_state`, `pad1` / `pad1_prev` / `pad1_edge`, `scroll_*`, `player_x_*`, `player_y`, `screen_x`, `vel_y`, `on_ground`, `has_package`, `oam_idx`
+
+### CHR tiles
+
+Order in `tiles:` … `tiles_end:` must match constants `T_*` (sky, player, ground, brick, platform, box, truck, font).
+
+Font: `T_FONT + 0` = space, `+1` = A … `+26` = Z, `+27` = `!`. Strings are font-relative indices ending in `$FF`.
 
 ### Metasprite format
 
-Each entry is 4 bytes: **Y offset, X offset, tile, attributes**. Terminator: `$80`.
+Y-off, X-off, tile, attr; terminator `$80`. Drawn at `player_y` / `screen_x`.
 
-## Conventions when editing
+## Conventions
 
-**Graphics**
+- Change scroll / PPUCTRL nametable bits only in a way NMI applies every frame
+- Keep `oam_shadow` first in BSS at `$0200` for OAM DMA
+- Prefer `make clean && make` after large edits
+- iNES header must keep **vertical mirroring** (`flags6` bit 0 = 1) for dual-nametable horizontal scroll
 
-1. Append tile bytes inside `tiles:` … `tiles_end:`
-2. Update tile index constants (and any hardcoded map bytes)
-3. New metasprites: same 4-byte format + `$80` end marker
+## Out of scope (v1)
 
-**Gameplay knobs** (search symbols, not line numbers)
-
-- Movement: `inc`/`dec` of `sprite_x` / `sprite_y` on D-pad bits
-- Anim rate: three `lsr` on `anim_frame` (÷8)
-- Controller bits in `pad1` after `read_controller1`: bit7 Right, bit6 Left, bit5 Down, bit4 Up, bit3 Start, bit2 Select, bit1 B, bit0 A
-
-**Build discipline**
-
-- Prefer `make clean && make` after structural changes
-- Keep OAM shadow at `$0200` (BSS must stay first so DMA page is `$02`)
-- Do not break the NMI → `frame_flag` → main loop frame sync
-
-## Out of scope / keep simple
-
-Single-file codebase is intentional. Split files only if the project grows past a toy. Prefer NROM/CHR-RAM patterns already in use over introducing mappers early.
+Enemies, sound, multi-level, vertical scroll, mapper upgrades.

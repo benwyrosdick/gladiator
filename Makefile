@@ -1,7 +1,7 @@
-# Gladiator NES — requires cc65 (ca65, ld65) and python3
+# VESYL Shipper NES — requires cc65 (ca65, ld65) and python3
 # make / make clean
 
-NAME  = gladiator
+NAME  = vesyl_shipper
 CC65 ?= ca65
 LD65 ?= ld65
 
@@ -22,10 +22,10 @@ $(OBJ): $(SRC)
 $(PRG): $(OBJ) $(CFG)
 	$(LD65) -C $(CFG) $(OBJ) -o $(PRG)
 
-# iNES: "NES\x1A", 1 PRG bank (16KB), 0 CHR (CHR-RAM), mapper 0
+# iNES: 1 PRG, 0 CHR (CHR-RAM), mapper 0, vertical mirroring (horizontal scroll)
 $(HDR):
 	mkdir -p $(BUILD)
-	python3 -c "open('$(HDR)','wb').write(b'NES\x1a'+bytes([1,0,0,0])+bytes(8))"
+	python3 -c "open('$(HDR)','wb').write(b'NES\x1a'+bytes([1,0,1,0])+bytes(8))"
 
 $(NES): $(PRG) $(HDR)
 	cat $(HDR) $(PRG) > $(NES)

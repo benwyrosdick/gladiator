@@ -1,15 +1,13 @@
-# Gladiator
+# VESYL Shipper
 
-A small homebrew NES game written in 6502 assembly. Built as a learning project for NES development with the cc65 toolchain.
+A simple NES side-scroller written in 6502 assembly (cc65). Carry a package from the warehouse to the delivery truck.
 
-- **Mapper 0 (NROM-128)**: 16KB PRG-ROM, CHR-RAM
-- Move a 16×16 gladiator around a simple arena with D-pad walk animation
+- **Mapper 0 (NROM-128)**: 16KB PRG-ROM, CHR-RAM, vertical mirroring (horizontal scroll)
 
 ## Requirements
 
 - **cc65** (`ca65`, `ld65`) on your PATH  
-  - macOS: `brew install cc65`  
-  - Linux: package manager or [build from source](https://cc65.github.io/)
+  - macOS: `brew install cc65`
 - An NES emulator (Mesen, FCEUX, Nestopia UE, …)
 
 ## Build
@@ -18,23 +16,31 @@ A small homebrew NES game written in 6502 assembly. Built as a learning project 
 make
 ```
 
-Produces `build/gladiator.nes`. Load that file in your emulator.
+Produces `build/vesyl_shipper.nes`.
 
 ```sh
-make clean   # remove build/
+make clean
 ```
 
-## Project layout
+## How to play
+
+| Control | Action |
+|---------|--------|
+| **Start** | Begin from title / return from win |
+| **D-pad L/R** | Walk |
+| **A** | Jump |
+
+1. Title screen: **VESYL SHIPPER** — press **Start**
+2. Pick up the package in the warehouse (walk into it)
+3. Head right (platforms optional), reach the delivery truck
+4. **DELIVERED!** — press **Start** for the title again
+
+## Layout
 
 ```
-src/main.s              Game code, tiles, map, palettes
-nrom128.cfg             Linker config (NROM-128 memory map)
-Makefile                Assemble, link, write iNES header
-nes_assembly_guide.md   General NES / 6502 reference
+src/main.s              Game code, tiles, level, states
+nrom128.cfg             Linker config
+Makefile                Build → build/vesyl_shipper.nes
+nes_assembly_guide.md   NES / 6502 reference
 CLAUDE.md               Notes for AI coding agents
 ```
-
-## Notes
-
-- The iNES header is 1 PRG bank, 0 CHR banks (CHR-RAM). Common emulators handle this fine.
-- For larger games you would step up to NROM-256 or mappers such as MMC1/MMC3.
