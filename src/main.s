@@ -79,9 +79,10 @@ MAX_SCROLL_H = $01
 GROUND_TOP_Y = 168          ; pixel Y of ground surface (row 21)
 ; nametable rows: ground top at row 21 (21*8=168)
 
-PKG_WORLD_X_L = 48          ; package world X
+PKG_WORLD_X_L = 80          ; package world X (past spawn so not auto-picked)
 PKG_WORLD_X_H = 0
-PKG_WORLD_Y   = 152         ; on ground (16px tall box sprite uses 8px tile)
+PKG_WORLD_Y   = 152         ; 16×16 package sits on ground (top at 168-16)
+PKG_H         = 16
 
 ; Truck BG tiles: NT1 cols 22–27 → world X 432–480 (hi=$01)
 TRUCK_LEFT_L  = $B0         ; 256+176=432
@@ -170,8 +171,9 @@ player_s_3_walk:
 	.byte $FF,$81,$BD,$BD,$FF,$DB,$DB,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
 ; $0A platform — full 8×8 solid ledge (white top, blue body; always visible on black sky)
 	.byte $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF
-; $0B small package sprite (front of box)
-	.byte $FF,$81,$A5,$81,$BD,$99,$81,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+; $0B package TL (16×16 = this + TR/BL/BR drawn as 4 sprites)
+; 0=clear  1=label  2=cardboard  3=red tape/outline
+	.byte $7F,$40,$5F,$51,$51,$5F,$40,$7F,$00,$3F,$20,$2E,$2E,$20,$3F,$00
 ; $0C–$1D title flat shipping box (6×3 tiles) — front view
 ; 0=black outline/icons  1=light panel+label  2=cardboard  3=red tape/border
 	.byte $00,$00,$3F,$3F,$3F,$3F,$3F,$3F,$00,$00,$00,$00,$00,$00,$00,$00  ; 0
@@ -1000,7 +1002,7 @@ check_package:
 	cmp #PKG_WORLD_Y
 	bcc @done
 	lda player_y
-	cmp #PKG_WORLD_Y + 16
+	cmp #PKG_WORLD_Y + PKG_H
 	bcs @done
 	lda #1
 	sta has_package
@@ -1030,6 +1032,12 @@ draw_play_sprites:
 	lda #0
 	sta oam_idx
 
+	; Held package first → lower OAM index = drawn in front of player
+	lda has_package
+	beq @pick_player
+	jsr draw_held_package
+
+@pick_player:
 	; choose metasprite (walk if any horizontal velocity)
 	lda facing
 	bne @face_l
@@ -1090,32 +1098,91 @@ draw_play_sprites:
 @draw_p:
 	jsr draw_metasprite
 
-	; package world sprite if not held
+	; World package only while not carrying
 	lda has_package
-	bne @held
+	bne @done
 	jsr draw_world_package
-	jmp @done
-@held:
-	; small box on player
+@done:
+	rts
+
+; 16×16 package: 4 sprites of T_BOX (TL/TR/BL/BR via H/V flip)
+; temp = screen X of top-left, temp2 = screen Y of top-left
+draw_package_sprites:
 	ldx oam_idx
-	lda player_y
-	clc
-	adc #4
+	; TL
+	lda temp2
 	sta oam_shadow, x
 	lda #T_BOX
 	sta oam_shadow+1, x
 	lda #%00000001          ; palette 1
 	sta oam_shadow+2, x
+	lda temp
+	sta oam_shadow+3, x
+	; TR (H-flip)
+	lda temp2
+	sta oam_shadow+4, x
+	lda #T_BOX
+	sta oam_shadow+5, x
+	lda #%01000001          ; H-flip, pal 1
+	sta oam_shadow+6, x
+	lda temp
+	clc
+	adc #8
+	sta oam_shadow+7, x
+	; BL (V-flip)
+	lda temp2
+	clc
+	adc #8
+	sta oam_shadow+8, x
+	lda #T_BOX
+	sta oam_shadow+9, x
+	lda #%10000001          ; V-flip, pal 1
+	sta oam_shadow+10, x
+	lda temp
+	sta oam_shadow+11, x
+	; BR (H+V flip)
+	lda temp2
+	clc
+	adc #8
+	sta oam_shadow+12, x
+	lda #T_BOX
+	sta oam_shadow+13, x
+	lda #%11000001          ; H+V flip, pal 1
+	sta oam_shadow+14, x
+	lda temp
+	clc
+	adc #8
+	sta oam_shadow+15, x
+	txa
+	clc
+	adc #16
+	sta oam_idx
+	rts
+
+draw_held_package:
+	; Carry above head, slightly forward by facing
+	lda player_y
+	sec
+	sbc #14
+	bcs @yok
+	lda #0
+@yok:
+	sta temp2
+	lda facing
+	bne @face_l
 	lda screen_x
 	clc
 	adc #4
-	sta oam_shadow+3, x
-	txa
-	clc
-	adc #4
-	sta oam_idx
-@done:
-	rts
+	jmp @xset
+@face_l:
+	lda screen_x
+	sec
+	sbc #4
+	bcs @xset
+	lda #0
+@xset:
+	sta temp
+	jmp draw_package_sprites
 
 draw_world_package:
 	; screen x = pkg_x - scroll
@@ -1125,21 +1192,10 @@ draw_world_package:
 	sta temp
 	lda #PKG_WORLD_X_H
 	sbc scroll_hi
-	bne @offscreen          ; hi != 0 means off left or far right
-	; temp is screen x 0-255
-	ldx oam_idx
+	bne @offscreen          ; hi != 0 → off left or far right
 	lda #PKG_WORLD_Y
-	sta oam_shadow, x
-	lda #T_BOX
-	sta oam_shadow+1, x
-	lda #%00000001
-	sta oam_shadow+2, x
-	lda temp
-	sta oam_shadow+3, x
-	txa
-	clc
-	adc #4
-	sta oam_idx
+	sta temp2
+	jmp draw_package_sprites
 @offscreen:
 	rts
 
