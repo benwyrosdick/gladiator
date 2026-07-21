@@ -531,33 +531,60 @@ probe_support:
 	sta on_ground
 	rts
 @plats:
-	; platform 1 @ 136
+	; platform 1 @ y=136, x 160-224 — any horizontal overlap with 16px body
 	cmp #136
 	bne @p2
-	lda player_x_hi
-	bne @p2
-	lda player_x_lo
-	cmp #160
+	jsr plat1_x_overlap
 	bcc @p2
-	cmp #224
-	bcs @p2
 	lda #1
 	sta on_ground
 	rts
 @p2:
+	; platform 2 @ y=144, x 320-384
 	cmp #144
 	bne @done
-	lda player_x_hi
-	cmp #1
-	bne @done
-	lda player_x_lo
-	cmp #64
+	jsr plat2_x_overlap
 	bcc @done
-	cmp #128
-	bcs @done
 	lda #1
 	sta on_ground
 @done:
+	rts
+
+; C=1 if player [x, x+16) overlaps platform 1 [160, 224)
+; i.e. player_x < 224 AND player_x + 16 > 160
+plat1_x_overlap:
+	lda player_x_hi
+	bne @no                   ; x >= 256, past this platform
+	lda player_x_lo
+	cmp #224
+	bcs @no                   ; left edge at/past platform right
+	clc
+	adc #PLAYER_W
+	cmp #161                  ; right edge > 160
+	bcc @no
+	sec
+	rts
+@no:
+	clc
+	rts
+
+; C=1 if player overlaps platform 2 [320, 384)
+; i.e. player_x < 384 AND player_x + 16 > 320
+plat2_x_overlap:
+	lda player_x_hi
+	cmp #1
+	bne @no                   ; only in second screen half
+	lda player_x_lo
+	cmp #128                  ; world x >= 384
+	bcs @no
+	clc
+	adc #PLAYER_W
+	cmp #65                   ; world (256+lo+16) > 320 → lo+16 > 64
+	bcc @no
+	sec
+	rts
+@no:
+	clc
 	rts
 
 apply_horizontal:
@@ -682,14 +709,9 @@ collide_vertical:
 	rts
 
 @plats:
-	; Platform 1: x 160-224, top 136
-	lda player_x_hi
-	bne @p2
-	lda player_x_lo
-	cmp #160
+	; Platform 1: any body overlap with [160,224), feet crossing top 136
+	jsr plat1_x_overlap
 	bcc @p2
-	cmp #224
-	bcs @p2
 	lda check_y
 	cmp #136
 	bcc @p2
@@ -704,15 +726,9 @@ collide_vertical:
 	rts
 
 @p2:
-	; Platform 2: x 320-384, top 144
-	lda player_x_hi
-	cmp #1
-	bne @done
-	lda player_x_lo
-	cmp #64
+	; Platform 2: any body overlap with [320,384), top 144
+	jsr plat2_x_overlap
 	bcc @done
-	cmp #128
-	bcs @done
 	lda check_y
 	cmp #144
 	bcc @done
