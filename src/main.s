@@ -21,6 +21,7 @@ OAMDMA    = $4014
 STATE_TITLE = 0
 STATE_PLAY  = 1
 STATE_WIN   = 2
+STATE_PAUSE = 3
 
 ; Controller bits after read_controller (ROL serial read):
 ; bit7=A bit6=B bit5=Select bit4=Start bit3=Up bit2=Down bit1=Left bit0=Right
@@ -378,6 +379,12 @@ str_win:
 str_acme:
 	; A C M E
 	.byte 1,3,13,5, $FF
+; Sprite tile indices for PAUSED overlay (absolute CHR)
+pause_tiles:
+	.byte T_FONT+16, T_FONT+1, T_FONT+21, T_FONT+19, T_FONT+5, T_FONT+4
+PAUSE_LEN = 6
+PAUSE_X0  = 104             ; (256 - 6*8) / 2
+PAUSE_Y   = 112
 
 ; -------------------------
 ; CODE
@@ -435,6 +442,8 @@ main_loop:
 	beq @title
 	cmp #STATE_PLAY
 	beq @play
+	cmp #STATE_PAUSE
+	beq @pause
 	cmp #STATE_WIN
 	beq @win
 	jmp main_loop
@@ -444,6 +453,9 @@ main_loop:
 	jmp main_loop
 @play:
 	jsr update_play
+	jmp main_loop
+@pause:
+	jsr update_pause
 	jmp main_loop
 @win:
 	jsr update_win
@@ -638,6 +650,17 @@ enter_play:
 	rts
 
 update_play:
+	; Start → pause (edge so we don't immediately unpause)
+	lda pad1_edge
+	and #BTN_START
+	beq @run
+	lda #STATE_PAUSE
+	sta game_state
+	jsr draw_play_sprites
+	jsr draw_pause_label
+	rts
+
+@run:
 	lda player_x_lo
 	sta old_x_lo
 	lda player_x_hi
@@ -657,6 +680,48 @@ update_play:
 	jsr update_free_package
 	jsr check_truck
 	jsr draw_play_sprites
+	rts
+
+; Frozen play scene; Start again resumes
+update_pause:
+	lda pad1_edge
+	and #BTN_START
+	beq @frozen
+	lda #STATE_PLAY
+	sta game_state
+	jsr draw_play_sprites
+	rts
+@frozen:
+	jsr draw_play_sprites
+	jsr draw_pause_label
+	rts
+
+; "PAUSED" as centered sprites (font CHR works in OAM)
+draw_pause_label:
+	ldx oam_idx
+	ldy #0
+	lda #PAUSE_X0
+	sta temp
+@loop:
+	lda #PAUSE_Y
+	sta oam_shadow, x
+	lda pause_tiles, y
+	sta oam_shadow+1, x
+	lda #%00000000          ; sprite pal 0 (white highlight)
+	sta oam_shadow+2, x
+	lda temp
+	sta oam_shadow+3, x
+	clc
+	adc #8
+	sta temp
+	txa
+	clc
+	adc #4
+	tax
+	iny
+	cpy #PAUSE_LEN
+	bne @loop
+	stx oam_idx
 	rts
 
 ; Once feet are clearly below the dropped platform, allow that Y again
@@ -1971,8 +2036,11 @@ draw_play_sprites:
 @done:
 	rts
 
-; Advance walk cycle; 2x when holding B (run)
+; Advance walk cycle; 2x when holding B (run). Frozen while paused.
 advance_walk_anim:
+	lda game_state
+	cmp #STATE_PAUSE
+	beq @done
 	inc anim_frame
 	lda pad1
 	and #BTN_B
