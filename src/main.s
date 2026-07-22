@@ -167,17 +167,17 @@ sky_tile:
 
 ; player (original gladiator art)
 player_s_0_idle:
-	.byte $07,$08,$10,$20,$20,$17,$0F,$0F,$00,$07,$0F,$1F,$1F,$09,$05,$05
+	.byte $07,$08,$10,$20,$20,$17,$0F,$0F,$00,$07,$0F,$1F,$1F,$09,$05,$05  ; 0
 player_s_1_idle:
-	.byte $E0,$10,$08,$08,$88,$E8,$F0,$F0,$00,$E0,$F0,$F0,$F0,$10,$A0,$A0
+	.byte $E0,$10,$08,$08,$88,$E8,$F0,$F0,$00,$E0,$F0,$F0,$F0,$10,$A0,$A0  ; 1
 player_s_2_idle:
-	.byte $1F,$3F,$4F,$4F,$3F,$0F,$17,$21,$0B,$1C,$3B,$33,$04,$06,$0E,$1E
+	.byte $1B,$39,$4C,$4C,$3C,$0E,$17,$21,$0F,$1F,$3B,$33,$07,$07,$0E,$1E  ; 2
 player_s_3_idle:
-	.byte $F8,$FC,$F2,$F2,$FC,$F0,$D0,$08,$D0,$38,$DC,$CC,$20,$60,$E0,$F0
+	.byte $D8,$9C,$32,$32,$3C,$70,$D0,$08,$F0,$F8,$DC,$CC,$E0,$E0,$E0,$F0  ; 3
 player_s_2_walk:
-	.byte $1F,$3F,$4F,$4F,$3F,$17,$21,$1F,$0B,$1C,$3B,$33,$04,$0E,$1E,$00
+	.byte $1F,$39,$4C,$4C,$3E,$17,$21,$1F,$0B,$1F,$3B,$33,$05,$0E,$1E,$00  ; 4
 player_s_3_walk:
-	.byte $F8,$FC,$F2,$F2,$FC,$D0,$08,$F0,$D0,$38,$DC,$CC,$20,$60,$F0,$00
+	.byte $F8,$9C,$32,$32,$7C,$D0,$08,$F0,$D0,$F8,$DC,$CC,$A0,$60,$F0,$00  ; 5
 
 ; NES CHR: 8 bytes plane0 (rows 0-7) then 8 bytes plane1.
 ; Same bits in both planes → palette index 3 (bright).
