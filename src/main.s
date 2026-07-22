@@ -1850,10 +1850,11 @@ package_integrate_y:
 	rts
 
 check_truck:
-	; Win when carrying package and player AABB overlaps truck
-	; player: [x, x+PLAYER_W), truck: [432, 480)
-	; => player_x >= 432-16 (416) and player_x < 480
+	; Win only when carrying package, on the ground, and overlapping truck X
+	; (jumping over the truck does not count)
 	lda has_package
+	beq @done
+	lda on_ground
 	beq @done
 	lda player_x_hi
 	cmp #TRUCK_LEFT_H
