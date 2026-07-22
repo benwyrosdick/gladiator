@@ -204,7 +204,7 @@ player_s_3_walk:
 ; Same bits in both planes → palette index 3 (bright).
 
 ground_top_tile:
-	.byte $FF,$FF,$AA,$55,$AA,$55,$FF,$FF,$00,$FF,$55,$AA,$55,$AA,$FF,$FF
+	.byte $FF,$FF,$FF,$55,$AA,$55,$AA,$55,$00,$00,$FF,$AA,$55,$AA,$55,$AA  ; 0
 ground_fill_tile:
 	.byte $AA,$55,$AA,$55,$AA,$55,$AA,$55,$55,$AA,$55,$AA,$55,$AA,$55,$AA
 brick_tile:
