@@ -110,6 +110,7 @@ PKG_WORLD_X_L = 44          ; on high shelf center
 PKG_WORLD_X_H = 0
 PKG_WORLD_Y   = SHELF_HIGH_Y - PKG_H   ; 84
 PKG_THROW     = $04          ; extra horizontal toss on drop (0.25 px/f)
+PKG_TOSS_UP   = $D0          ; -48 (1/16 px) ≈ -3 px/f upward when holding Up on release
 
 ; Truck BG tiles: NT1 cols 22-27 → world X 432-480 (hi=$01)
 TRUCK_LEFT_L  = $B0         ; 256+176=432
@@ -1483,6 +1484,7 @@ try_pickup_package:
 	rts
 
 ; Release package beside player with inherited velocity
+; Hold Up on release → also pitch upward (plus forward from facing/run)
 drop_package:
 	lda player_y
 	clc
@@ -1492,11 +1494,27 @@ drop_package:
 	sta package_x_sub
 	sta package_y_sub
 	sta package_on_ground
+	; inherit downward velocity only (don't keep player's jump vel by default)
 	lda vel_y
 	bpl @inhy
 	lda #0
 @inhy:
 	sta package_vel_y
+	; Up held → toss into the air
+	lda pad1
+	and #BTN_UP
+	beq @no_up
+	lda #PKG_TOSS_UP
+	sta package_vel_y
+	; spawn a bit higher so it clears the player's head/shelf
+	lda package_y
+	sec
+	sbc #8
+	bcs @yok
+	lda #0
+@yok:
+	sta package_y
+@no_up:
 	lda vel_x
 	sta package_vel_x
 	lda facing

@@ -40,7 +40,7 @@ make clean
 | **Start** | Begin from title / return from win |
 | **D-pad ← →** | Walk left / right (accelerates / coasts like Mario) |
 | **B** (hold) | Run; also **hold package** when touching it (like a Mario shell) |
-| **B** (release) | Drop package |
+| **B** (release) | Drop package (hold **Up** to toss it up + forward) |
 | **A** | Jump (hold longer for higher jump) |
 | **Down + A** | Drop through a shelf/platform |
 
