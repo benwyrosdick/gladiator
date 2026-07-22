@@ -367,6 +367,9 @@ str_press:
 str_win:
 	; D E L I V E R E D !
 	.byte 4,5,12,9,22,5,18,5,4, 27, $FF
+str_acme:
+	; A C M E
+	.byte 1,3,13,5, $FF
 
 ; -------------------------
 ; CODE
@@ -2211,6 +2214,47 @@ draw_warehouse:
 	sta PPUDATA
 	dex
 	bne @ceil
+
+	; ACME signboard on roof (rows 2-4, cols 4-9)
+	; top border
+	lda #$20
+	sta PPUADDR
+	lda #$44                ; row 2 col 4
+	sta PPUADDR
+	ldx #6
+	lda #T_BRICK
+@sign_top:
+	sta PPUDATA
+	dex
+	bne @sign_top
+	; middle: | A C M E |
+	lda #$20
+	sta PPUADDR
+	lda #$64                ; row 3 col 4
+	sta PPUADDR
+	lda #T_BRICK
+	sta PPUDATA
+	lda #T_FONT + 1         ; A
+	sta PPUDATA
+	lda #T_FONT + 3         ; C
+	sta PPUDATA
+	lda #T_FONT + 13        ; M
+	sta PPUDATA
+	lda #T_FONT + 5         ; E
+	sta PPUDATA
+	lda #T_BRICK
+	sta PPUDATA
+	; bottom border (rests on ceiling)
+	lda #$20
+	sta PPUADDR
+	lda #$84                ; row 4 col 4
+	sta PPUADDR
+	ldx #6
+	lda #T_BRICK
+@sign_bot:
+	sta PPUDATA
+	dex
+	bne @sign_bot
 
 	; Left wall cols 0-1, rows 6-20
 	ldx #6
