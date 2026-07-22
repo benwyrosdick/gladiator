@@ -351,48 +351,51 @@ PLAYER_IDLE_3 = T_PLAYER_S_3_IDLE
 PLAYER_WALK_2 = T_PLAYER_S_2_WALK
 PLAYER_WALK_3 = T_PLAYER_S_3_WALK
 
-; Metasprites: Y, X, tile, attr … $80
+; Metasprites: Y, X, tile, attr … END_METASPRITE
+; First field is Y-offset; $80 is reserved as list terminator (not a valid Y-off here).
+END_METASPRITE = $80
+
 player_idle_metasprite:
 	.byte 0, 0, PLAYER_IDLE_0, %00000000
 	.byte 0, 8, PLAYER_IDLE_1, %00000000
 	.byte 8, 0, PLAYER_IDLE_2, %00000000
 	.byte 8, 8, PLAYER_IDLE_3, %00000000
-	.byte $80
+	.byte END_METASPRITE
 
 player_walk1_metasprite:
 	.byte 0, 0, PLAYER_IDLE_0, %00000000
 	.byte 0, 8, PLAYER_IDLE_1, %00000000
 	.byte 8, 0, PLAYER_IDLE_2, %00000000
 	.byte 8, 8, PLAYER_WALK_3, %00000000
-	.byte $80
+	.byte END_METASPRITE
 
 player_walk2_metasprite:
 	.byte 0, 0, PLAYER_IDLE_0, %00000000
 	.byte 0, 8, PLAYER_IDLE_1, %00000000
 	.byte 8, 0, PLAYER_WALK_2, %00000000
 	.byte 8, 8, PLAYER_IDLE_3, %00000000
-	.byte $80
+	.byte END_METASPRITE
 
 player_idle_flip:
 	.byte 0, 8, PLAYER_IDLE_0, %01000000
 	.byte 0, 0, PLAYER_IDLE_1, %01000000
 	.byte 8, 8, PLAYER_IDLE_2, %01000000
 	.byte 8, 0, PLAYER_IDLE_3, %01000000
-	.byte $80
+	.byte END_METASPRITE
 
 player_walk1_flip:
 	.byte 0, 8, PLAYER_IDLE_0, %01000000
 	.byte 0, 0, PLAYER_IDLE_1, %01000000
 	.byte 8, 8, PLAYER_IDLE_2, %01000000
 	.byte 8, 0, PLAYER_WALK_3, %01000000
-	.byte $80
+	.byte END_METASPRITE
 
 player_walk2_flip:
 	.byte 0, 8, PLAYER_IDLE_0, %01000000
 	.byte 0, 0, PLAYER_IDLE_1, %01000000
 	.byte 8, 8, PLAYER_WALK_2, %01000000
 	.byte 8, 0, PLAYER_IDLE_3, %01000000
-	.byte $80
+	.byte END_METASPRITE
 
 ; Palettes
 bg_palette:
@@ -2939,7 +2942,7 @@ draw_metasprite:
 	ldx oam_idx
 @loop:
 	lda (metasprite_ptr_lo), y
-	cmp #$80
+	cmp #END_METASPRITE
 	beq @done
 	clc
 	adc player_y
