@@ -206,12 +206,12 @@ player_s_3_walk:
 ground_top_tile:
 	.byte $FF,$FF,$FF,$55,$AA,$55,$AA,$55,$00,$00,$FF,$AA,$55,$AA,$55,$AA  ; 0
 ground_fill_tile:
-	.byte $AA,$55,$AA,$55,$AA,$55,$AA,$55,$55,$AA,$55,$AA,$55,$AA,$55,$AA
+	.byte $AA,$55,$AA,$55,$AA,$55,$AA,$55,$55,$AA,$55,$AA,$55,$AA,$55,$AA  ; 0
 brick_tile:
-	.byte $FF,$81,$BD,$BD,$FF,$DB,$DB,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+	.byte $00,$DF,$DF,$DF,$00,$FB,$FB,$FB,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 0
 ; platform — full 8x8 solid ledge (white top, blue body; always visible on black sky)
 platform_tile:
-	.byte $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF
+	.byte $FF,$FF,$EE,$DD,$BB,$77,$EE,$DD,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF  ; 0
 ; package 12x12 (TL/TR/BL/BR). 0=clear 1=white label 2=cardboard 3=outline
 ; Label is 4x6 at (2,2) inside the box
 package_tiles:
