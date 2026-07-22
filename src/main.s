@@ -205,21 +205,26 @@ player_s_3_walk:
 
 ground_top_tile:
 	.byte $FF,$FF,$FF,$55,$AA,$55,$AA,$55,$00,$00,$FF,$AA,$55,$AA,$55,$AA  ; 0
+	
 ground_fill_tile:
 	.byte $AA,$55,$AA,$55,$AA,$55,$AA,$55,$55,$AA,$55,$AA,$55,$AA,$55,$AA  ; 0
+
 brick_tile:
 	.byte $00,$DF,$DF,$DF,$00,$FB,$FB,$FB,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 0
+
 ; platform — full 8x8 solid ledge (white top, blue body; always visible on black sky)
 platform_tile:
 	.byte $FF,$FF,$EE,$DD,$BB,$77,$EE,$DD,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF  ; 0
+
 ; package 12x12 (TL/TR/BL/BR). 0=clear 1=white label 2=cardboard 3=outline
 ; Label is 4x6 at (2,2) inside the box
 package_tiles:
-	.byte $FF,$80,$BC,$BC,$BC,$BC,$BC,$BC,$FF,$FF,$C3,$DB,$C3,$C3,$FF,$C3  ; 0
+	.byte $FF,$80,$BC,$BC,$A4,$BC,$A4,$BC,$FF,$FF,$C3,$DB,$DB,$DB,$DB,$C3  ; 0
 	.byte $F0,$10,$10,$10,$10,$10,$10,$10,$F0,$F0,$F0,$F0,$F0,$F0,$F0,$F0  ; 1
 
 	.byte $80,$80,$80,$FF,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$00,$00,$00,$00  ; 2
 	.byte $10,$10,$10,$F0,$00,$00,$00,$00,$F0,$F0,$F0,$F0,$00,$00,$00,$00  ; 3
+
 ; title flat shipping box 6x3 — front view
 ; 0=black outline/icons  1=light panel+label  2=cardboard  3=red tape/border
 title_package_tiles:
@@ -243,6 +248,7 @@ title_package_tiles:
 	.byte $00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00  ; 15
 	.byte $00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00  ; 16
 	.byte $41,$41,$42,$44,$48,$50,$60,$C0,$BE,$BE,$BC,$B8,$B0,$A0,$80,$00  ; 17
+
 ; delivery truck 8x4 — yellow/red van, facing right
 ; 0=empty (sky)  1=yellow body  2=red cab/lines  3=dark outline+tires (visible on black)
 delivery_truck_tiles:
