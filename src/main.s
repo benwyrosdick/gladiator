@@ -219,7 +219,7 @@ platform_tile:
 ; package 12x12 (TL/TR/BL/BR). 0=clear 1=white label 2=cardboard 3=outline
 ; Label is 4x6 at (2,2) inside the box
 package_tiles:
-	.byte $FF,$80,$BC,$BC,$A4,$BC,$A4,$BC,$FF,$FF,$C3,$DB,$DB,$DB,$DB,$C3  ; 0
+	.byte $FF,$80,$BC,$BC,$BC,$BC,$BC,$80,$FF,$FF,$C3,$DB,$C3,$DB,$C3,$FF  ; 0
 	.byte $F0,$10,$10,$10,$10,$10,$10,$10,$F0,$F0,$F0,$F0,$F0,$F0,$F0,$F0  ; 1
 
 	.byte $80,$80,$80,$FF,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$00,$00,$00,$00  ; 2
