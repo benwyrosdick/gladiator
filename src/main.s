@@ -207,15 +207,15 @@ player_s_3_walk:
 	.byte $AA,$55,$AA,$55,$AA,$55,$AA,$55,$55,$AA,$55,$AA,$55,$AA,$55,$AA
 ; $09 brick
 	.byte $FF,$81,$BD,$BD,$FF,$DB,$DB,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
-; $0A platform — full 8×8 solid ledge (white top, blue body; always visible on black sky)
+; $0A platform — full 8x8 solid ledge (white top, blue body; always visible on black sky)
 	.byte $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF
-; $0B-$0E package 12×12 (TL/TR/BL/BR). 0=clear 1=white label 2=cardboard 3=outline
-; Label is 4×6 at (2,2) inside the box
+; $0B-$0E package 12x12 (TL/TR/BL/BR). 0=clear 1=white label 2=cardboard 3=outline
+; Label is 4x6 at (2,2) inside the box
 	.byte $FF,$80,$BC,$BC,$BC,$BC,$BC,$BC,$FF,$FF,$C3,$C3,$C3,$C3,$C3,$C3  ; TL
 	.byte $F0,$10,$10,$10,$10,$10,$10,$10,$F0,$F0,$F0,$F0,$F0,$F0,$F0,$F0  ; TR
 	.byte $80,$80,$80,$FF,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$00,$00,$00,$00  ; BL
 	.byte $10,$10,$10,$F0,$00,$00,$00,$00,$F0,$F0,$F0,$F0,$00,$00,$00,$00  ; BR
-; $0F-$20 title flat shipping box (6×3 tiles) — front view
+; $0F-$20 title flat shipping box (6x3 tiles) — front view
 ; 0=black outline/icons  1=light panel+label  2=cardboard  3=red tape/border
 	.byte $00,$00,$3F,$3F,$3F,$3F,$3F,$3F,$00,$00,$00,$00,$00,$00,$00,$00  ; 0
 	.byte $00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$F8,$F8,$88,$D8,$D8,$F8  ; 1
@@ -235,7 +235,7 @@ player_s_3_walk:
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$01,$6D,$45,$6D,$6D,$01,$00,$00  ; 15
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$01,$45,$39,$39,$45,$01,$00,$00  ; 16
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$6C,$00,$6C,$6C,$00,$00,$00  ; 17
-; $21-$40 delivery truck 8×4 — large blue van + VS on side, facing right
+; $21-$40 delivery truck 8x4 — large blue van + VS on side, facing right
 ; 0=black outline/tires  1=blue body  2=white (VS/window)  3=red accents
 	.byte $00,$00,$00,$1F,$1F,$1F,$1F,$1F,$00,$00,$00,$00,$00,$00,$00,$00  ; 0
 	.byte $00,$00,$00,$FF,$1F,$8F,$C7,$E3,$00,$00,$00,$00,$E0,$70,$38,$1C  ; 1
@@ -486,7 +486,7 @@ update_title:
 	rts
 
 draw_title_screen:
-	; Flat shipping box 6×3 tiles, rows 9-11, cols 13-18 (centered)
+	; Flat shipping box 6x3 tiles, rows 9-11, cols 13-18 (centered)
 	; $2000 + 9*32 + 13 = $212D
 	lda #$21
 	sta PPUADDR
@@ -849,7 +849,7 @@ collide_walls:
 	sta vel_x
 
 @right:
-	; --- right wall solid when body overlaps [WH_RIGHT_L, WH_RIGHT_R) × [0, WH_DOOR_TOP) ---
+	; --- right wall solid when body overlaps [WH_RIGHT_L, WH_RIGHT_R) x [0, WH_DOOR_TOP) ---
 	lda player_x_hi
 	bne @ceil
 	; player right > wall left && player left < wall right
@@ -1964,7 +1964,7 @@ draw_play_sprites:
 @done:
 	rts
 
-; Advance walk cycle; 2× when holding B (run)
+; Advance walk cycle; 2x when holding B (run)
 advance_walk_anim:
 	inc anim_frame
 	lda pad1
@@ -1974,7 +1974,7 @@ advance_walk_anim:
 @done:
 	rts
 
-; 12×12 package: 4 sprites (TL/TR/BL/BR tiles). Transparent padding in TR/BL/BR.
+; 12x12 package: 4 sprites (TL/TR/BL/BR tiles). Transparent padding in TR/BL/BR.
 ; temp = screen X of top-left, temp2 = screen Y of top-left
 draw_package_sprites:
 	ldx oam_idx
@@ -2030,7 +2030,7 @@ draw_package_sprites:
 
 draw_held_package:
 	; Carry mid-body (chest/arms), slightly forward by facing
-	; Player 16px tall; 12×12 box at +2 sits in torso, drawn first so it is in front
+	; Player 16px tall; 12x12 box at +2 sits in torso, drawn first so it is in front
 	lda player_y
 	clc
 	adc #2
@@ -2393,7 +2393,7 @@ draw_platform_tiles:
 	rts
 
 draw_truck:
-	; 8×4 truck above ground (row 21). NT1 cols 20-27, rows 17-20.
+	; 8x4 truck above ground (row 21). NT1 cols 20-27, rows 17-20.
 	; world X ≈ 416-479.  $2400 + 17*32 + 20 = $2634
 	bit PPUSTATUS
 	ldx #0
