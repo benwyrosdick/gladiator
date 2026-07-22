@@ -104,8 +104,6 @@ SHELF_MID_R   = 88
 SHELF_HIGH_L  = 32
 SHELF_HIGH_R  = 72
 
-DROP_FRAMES   = 18          ; ignore platforms this long after down+jump
-
 PKG_W         = 12
 PKG_H         = 12
 PKG_WORLD_X_L = 44          ; on high shelf center
@@ -146,7 +144,7 @@ screen_x:          .res 1
 vel_x:             .res 1   ; signed, 1/16 px per frame
 vel_y:             .res 1   ; signed, 1/16 px per frame
 on_ground:         .res 1
-drop_timer:        .res 1   ; >0: fall through platforms (down+jump)
+drop_ignore_y:     .res 1   ; platform top Y to fall through ($FF = none)
 anim_frame:        .res 1
 facing:            .res 1   ; 0=right, 1=left (flip)
 has_package:       .res 1
@@ -586,8 +584,9 @@ enter_play:
 	sta player_y_sub
 	sta anim_frame
 	sta facing
-	sta drop_timer
 	sta player_x_hi
+	lda #$FF
+	sta drop_ignore_y
 	lda #40
 	sta player_x_lo
 	lda #GROUND_TOP_Y - PLAYER_H
@@ -637,7 +636,7 @@ update_play:
 
 	jsr apply_horizontal
 	jsr collide_walls          ; warehouse brick solids
-	jsr tick_drop_timer
+	jsr clear_drop_ignore_if_past
 	jsr probe_support          ; clear on_ground if walked off ledge
 	jsr apply_jump
 	jsr apply_gravity
@@ -650,10 +649,21 @@ update_play:
 	jsr draw_play_sprites
 	rts
 
-tick_drop_timer:
-	lda drop_timer
+; Once feet are clearly below the dropped platform, allow that Y again
+clear_drop_ignore_if_past:
+	lda drop_ignore_y
+	cmp #$FF
 	beq @done
-	dec drop_timer
+	lda player_y
+	clc
+	adc #PLAYER_H
+	sec
+	sbc drop_ignore_y        ; feet - ignored top
+	bcc @done                 ; still above (shouldn't happen)
+	cmp #10                   ; past platform thickness
+	bcc @done
+	lda #$FF
+	sta drop_ignore_y
 @done:
 	rts
 
@@ -669,11 +679,10 @@ probe_support:
 	bne @plats
 	lda #1
 	sta on_ground
+	lda #$FF
+	sta drop_ignore_y
 	rts
 @plats:
-	; down+jump drop-through: ignore platforms while timer active
-	lda drop_timer
-	bne @done
 	lda player_x_lo
 	sta check_x_lo
 	lda player_x_hi
@@ -682,6 +691,10 @@ probe_support:
 	sta temp3
 	jsr feet_on_any_platform
 	bcc @done
+	; standing on platform at check_y — ignore if drop-through that top
+	lda check_y
+	cmp drop_ignore_y
+	beq @done
 	lda #1
 	sta on_ground
 @done:
@@ -689,35 +702,43 @@ probe_support:
 
 ; feet_on_any_platform: check_y = feet, check_x_* = left, temp3 = width
 ; C=1 if standing on a shelf/platform (feet at exact top)
+; Note: multiple platforms can share the same Y — always try all that match.
 feet_on_any_platform:
-	; shelf high 96
 	lda check_y
 	cmp #SHELF_HIGH_Y
 	bne @mid
 	jsr x_overlap_shelf_high
-	rts
+	bcs @yes
 @mid:
+	lda check_y
 	cmp #SHELF_MID_Y
 	bne @low
 	jsr x_overlap_shelf_mid
-	rts
+	bcs @yes
 @low:
+	lda check_y
 	cmp #SHELF_LOW_Y
 	bne @out1
 	jsr x_overlap_shelf_low
-	rts
+	bcs @yes
 @out1:
-	cmp #136
+	lda check_y
+	cmp #136                   ; outdoor plat 1
 	bne @out2
 	jsr plat1_x_overlap
-	rts
+	bcs @yes
 @out2:
+	; outdoor plat 2 also at y=144 (same as SHELF_LOW) — always test
+	lda check_y
 	cmp #144
 	bne @no
 	jsr plat2_x_overlap
-	rts
+	bcs @yes
 @no:
 	clc
+	rts
+@yes:
+	sec
 	rts
 
 ; X overlap helpers: check_x / temp3 width vs [x0,x1)
@@ -1063,7 +1084,7 @@ apply_jump:
 	beq @done
 	lda on_ground
 	beq @done
-	; Hold Down+A on a platform → drop through (not on solid ground)
+	; Hold Down+A on a platform → drop through only that platform
 	lda pad1
 	and #BTN_DOWN
 	beq @normal_jump
@@ -1071,17 +1092,15 @@ apply_jump:
 	clc
 	adc #PLAYER_H
 	cmp #GROUND_TOP_Y
-	beq @normal_jump          ; on floor: normal jump, don't drop through world
-	; fall through shelf/platform
-	lda #DROP_FRAMES
-	sta drop_timer
+	beq @normal_jump          ; on floor: normal jump
+	; remember this platform top; other platforms still solid
+	sta drop_ignore_y
 	lda #0
 	sta on_ground
 	sta player_y_sub
 	lda #GRAVITY * 4          ; small downward nudge
 	sta vel_y
-	; nudge 1px down so feet leave platform top
-	inc player_y
+	inc player_y              ; leave platform top
 	rts
 @normal_jump:
 	lda has_package
@@ -1200,27 +1219,37 @@ collide_vertical:
 	rts
 
 @plats:
-	; drop-through: skip shelves/platforms while timer active
-	lda drop_timer
-	bne @done
 	lda player_x_lo
 	sta check_x_lo
 	lda player_x_hi
 	sta check_x_hi
 	lda #PLAYER_W
 	sta temp3
-	; try each surface: feet in [top, top+8)
+	; try each surface: feet in [top, top+8); skip only drop_ignore_y
 	jsr try_land_shelf_high
+	bcc @1
+	jsr accept_platform_land
 	bcs @snap
+@1:
 	jsr try_land_shelf_mid
+	bcc @2
+	jsr accept_platform_land
 	bcs @snap
+@2:
 	jsr try_land_shelf_low
+	bcc @3
+	jsr accept_platform_land
 	bcs @snap
+@3:
 	jsr try_land_plat1
+	bcc @4
+	jsr accept_platform_land
 	bcs @snap
+@4:
 	jsr try_land_plat2
-	bcs @snap
-	rts
+	bcc @done
+	jsr accept_platform_land
+	bcc @done
 @snap:
 	; A = platform top Y
 	sec
@@ -1232,6 +1261,19 @@ collide_vertical:
 	lda #1
 	sta on_ground
 @done:
+	rts
+
+; A = candidate top_y from try_land_*. C=1 accept, C=0 skip (drop-through that shelf)
+accept_platform_land:
+	cmp drop_ignore_y
+	beq @skip
+	; landed elsewhere — clear drop-through
+	ldx #$FF
+	stx drop_ignore_y
+	sec
+	rts
+@skip:
+	clc
 	rts
 
 ; try_land_*: C=1 and A=top_y if feet landing on that surface
