@@ -642,9 +642,8 @@ update_play:
 	jsr apply_gravity
 	jsr collide_vertical
 	jsr update_camera
-	jsr check_drop_package
+	jsr update_package_carry    ; B held = carry (Mario shell style)
 	jsr update_free_package
-	jsr check_package
 	jsr check_truck
 	jsr draw_play_sprites
 	rts
@@ -1408,28 +1407,93 @@ update_camera:
 	; result should be 0-255 in screen_x low; ignore hi
 	rts
 
-check_drop_package:
-	; Select while carrying → drop beside player (not under feet — avoids instant re-pickup)
-	lda pad1_edge
-	and #BTN_SELECT
-	beq @done
+; B held while overlapping package → pick up; release B → drop (Mario shell style)
+update_package_carry:
 	lda has_package
+	bne @holding
+	; --- not holding: pick up if B down and overlapping ---
+	lda pad1
+	and #BTN_B
 	beq @done
+	jsr try_pickup_package
+	rts
+@holding:
+	; --- holding: drop when B released ---
+	lda pad1
+	and #BTN_B
+	bne @done
+	jmp drop_package
+@done:
+	rts
+
+; C not used; sets has_package if AABB overlap with free package
+try_pickup_package:
+	; Y overlap
 	lda player_y
 	clc
-	adc #(PLAYER_H - PKG_H) ; release at feet height (falls if mid-air)
+	adc #PLAYER_H
+	cmp package_y
+	bcc @no
+	lda package_y
+	clc
+	adc #PKG_H
+	sta temp
+	lda player_y
+	cmp temp
+	bcs @no
+	; X: player_x < package_x + PKG_W
+	lda package_x_lo
+	clc
+	adc #PKG_W
+	sta temp
+	lda package_x_hi
+	adc #0
+	sta temp_hi
+	lda player_x_hi
+	cmp temp_hi
+	bcc @chk_r
+	bne @no
+	lda player_x_lo
+	cmp temp
+	bcs @no
+@chk_r:
+	; player_x + PLAYER_W > package_x
+	lda player_x_lo
+	clc
+	adc #PLAYER_W
+	sta temp
+	lda player_x_hi
+	adc #0
+	sta temp_hi
+	lda temp_hi
+	cmp package_x_hi
+	bcc @no
+	bne @yes
+	lda temp
+	cmp package_x_lo
+	bcc @no
+	beq @no
+@yes:
+	lda #1
+	sta has_package
+@no:
+	rts
+
+; Release package beside player with inherited velocity
+drop_package:
+	lda player_y
+	clc
+	adc #(PLAYER_H - PKG_H)
 	sta package_y
 	lda #0
 	sta package_x_sub
 	sta package_y_sub
 	sta package_on_ground
-	; inherit downward velocity so air drops keep falling
 	lda vel_y
 	bpl @inhy
 	lda #0
 @inhy:
 	sta package_vel_y
-	; horizontal: player vel_x + slight throw in facing direction
 	lda vel_x
 	sta package_vel_x
 	lda facing
@@ -1438,7 +1502,6 @@ check_drop_package:
 	clc
 	adc #PKG_THROW
 	sta package_vel_x
-	; facing right → place just to the right of player
 	lda player_x_lo
 	clc
 	adc #PLAYER_W
@@ -1452,7 +1515,6 @@ check_drop_package:
 	sec
 	sbc #PKG_THROW
 	sta package_vel_x
-	; facing left → place just to the left
 	lda player_x_lo
 	sec
 	sbc #PKG_W
@@ -1467,7 +1529,6 @@ check_drop_package:
 @clear:
 	lda #0
 	sta has_package
-@done:
 	rts
 
 ; Free package: horizontal coast/throw + gravity + land
@@ -1783,60 +1844,6 @@ package_integrate_y:
 @ydone:
 	lda temp
 	sta package_y_sub
-	rts
-
-check_package:
-	lda has_package
-	bne @done
-	; Y overlap: player bottom > pkg top && player top < pkg bottom
-	lda player_y
-	clc
-	adc #PLAYER_H
-	cmp package_y
-	bcc @done
-	lda package_y
-	clc
-	adc #PKG_H
-	sta temp
-	lda player_y
-	cmp temp
-	bcs @done
-	; X: player_x < package_x + PKG_W
-	lda package_x_lo
-	clc
-	adc #PKG_W
-	sta temp
-	lda package_x_hi
-	adc #0
-	sta temp_hi
-	lda player_x_hi
-	cmp temp_hi
-	bcc @chk_right          ; player left of pkg right edge
-	bne @done
-	lda player_x_lo
-	cmp temp
-	bcs @done
-@chk_right:
-	; player_x + PLAYER_W > package_x
-	lda player_x_lo
-	clc
-	adc #PLAYER_W
-	sta temp
-	lda player_x_hi
-	adc #0
-	sta temp_hi
-	lda temp_hi
-	cmp package_x_hi
-	bcc @done
-	bne @pickup
-	lda temp
-	cmp package_x_lo
-	bcc @done
-	beq @done               ; edges touch only — need overlap
-@pickup:
-	lda #1
-	sta has_package
-@done:
 	rts
 
 check_truck:
