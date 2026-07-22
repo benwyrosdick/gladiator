@@ -45,12 +45,12 @@ T_GROUND_TOP  = $07
 T_GROUND_FILL = $08
 T_BRICK       = $09
 T_PLATFORM    = $0A
-T_BOX         = $0B          ; package TL (12×12 uses $0B–$0E)
+T_BOX         = $0B          ; package TL (12x12 uses $0B-$0E)
 T_BOX_TR      = $0C
 T_BOX_BL      = $0D
 T_BOX_BR      = $0E
-T_BOX0        = $0F          ; title flat box 6×3 (tiles $0F–$20)
-T_TRUCK0      = $21          ; delivery truck 8×4 (tiles $21–$40)
+T_BOX0        = $0F          ; title flat box 6x3 (tiles $0F-$20)
+T_TRUCK0      = $21          ; delivery truck 8x4 (tiles $21-$40)
 T_FONT        = $41
 ; font: 0=space, 1=A … 26=Z, 27=!
 
@@ -73,7 +73,7 @@ MAX_FALL     = $60          ; 6.0 px/f terminal
 ; Horizontal motion (Mario-style accel / friction), units = 1/16 pixel
 ; Peak speeds ≈ walk 2px/f, run 4px/f
 WALK_MAX     = 24
-RUN_MAX      = 48
+RUN_MAX      = 42
 ACCEL        = 3              ; speed up when holding a direction
 FRICTION     = 2              ; slow down when no input
 SKID         = 5              ; brake faster when reversing
@@ -85,18 +85,18 @@ MAX_SCROLL_H = $01
 GROUND_TOP_Y = 168          ; pixel Y of ground surface (row 21)
 ; nametable rows: ground top at row 21 (21*8=168)
 
-; Warehouse geometry (NT0 / world X 0–127)
-WH_LEFT       = 16          ; left wall solid x < 16 (cols 0–1)
-WH_RIGHT_L    = 96          ; right wall cols 12–13 → x 96–112
+; Warehouse geometry (NT0 / world X 0-127)
+WH_LEFT       = 16          ; left wall solid x < 16 (cols 0-1)
+WH_RIGHT_L    = 96          ; right wall cols 12-13 → x 96-112
 WH_RIGHT_R    = 112
 WH_DOOR_TOP   = 136         ; open doorway for y >= 136 (tile rows 17+)
 WH_CEILING    = 40          ; bottom of ceiling (row 5 → y 40)
 
 ; Climbable shelves (platform tops), ~24px steps (within jump height)
 ; X ranges leave gaps from walls so you can drop off a side
-SHELF_LOW_Y   = 144         ; row 18, x 24–64 (cols 3–7)
-SHELF_MID_Y   = 120         ; row 15, x 48–88 (cols 6–10)
-SHELF_HIGH_Y  = 96          ; row 12, x 32–72 (cols 4–8) — package here
+SHELF_LOW_Y   = 144         ; row 18, x 24-64 (cols 3-7)
+SHELF_MID_Y   = 120         ; row 15, x 48-88 (cols 6-10)
+SHELF_HIGH_Y  = 96          ; row 12, x 32-72 (cols 4-8) — package here
 SHELF_LOW_L   = 24
 SHELF_LOW_R   = 64
 SHELF_MID_L   = 48
@@ -111,7 +111,7 @@ PKG_WORLD_X_H = 0
 PKG_WORLD_Y   = SHELF_HIGH_Y - PKG_H   ; 84
 PKG_THROW     = $04          ; extra horizontal toss on drop (0.25 px/f)
 
-; Truck BG tiles: NT1 cols 22–27 → world X 432–480 (hi=$01)
+; Truck BG tiles: NT1 cols 22-27 → world X 432-480 (hi=$01)
 TRUCK_LEFT_L  = $B0         ; 256+176=432
 TRUCK_LEFT_H  = $01
 TRUCK_RIGHT_L = $E0         ; 256+224=480
@@ -137,9 +137,9 @@ scroll_hi:         .res 1
 ppuctrl_nt:        .res 1   ; PPUCTRL with nametable bits
 player_x_lo:       .res 1
 player_x_hi:       .res 1
-player_x_sub:      .res 1   ; subpixel 0–15 (1/16 px)
+player_x_sub:      .res 1   ; subpixel 0-15 (1/16 px)
 player_y:          .res 1
-player_y_sub:      .res 1   ; subpixel 0–15 (1/16 px)
+player_y_sub:      .res 1   ; subpixel 0-15 (1/16 px)
 screen_x:          .res 1
 vel_x:             .res 1   ; signed, 1/16 px per frame
 vel_y:             .res 1   ; signed, 1/16 px per frame
@@ -150,9 +150,9 @@ facing:            .res 1   ; 0=right, 1=left (flip)
 has_package:       .res 1
 package_x_lo:      .res 1   ; world X of free package (when not held)
 package_x_hi:      .res 1
-package_x_sub:     .res 1   ; subpixel 0–15
+package_x_sub:     .res 1   ; subpixel 0-15
 package_y:         .res 1
-package_y_sub:     .res 1   ; subpixel 0–15
+package_y_sub:     .res 1   ; subpixel 0-15
 package_vel_x:     .res 1   ; signed, 1/16 px per frame
 package_vel_y:     .res 1   ; signed, 1/16 px per frame
 package_on_ground: .res 1
@@ -208,13 +208,13 @@ player_s_3_walk:
 	.byte $FF,$81,$BD,$BD,$FF,$DB,$DB,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
 ; $0A platform — full 8×8 solid ledge (white top, blue body; always visible on black sky)
 	.byte $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF
-; $0B–$0E package 12×12 (TL/TR/BL/BR). 0=clear 1=white label 2=cardboard 3=outline
+; $0B-$0E package 12×12 (TL/TR/BL/BR). 0=clear 1=white label 2=cardboard 3=outline
 ; Label is 4×6 at (2,2) inside the box
 	.byte $FF,$80,$BC,$BC,$BC,$BC,$BC,$BC,$FF,$FF,$C3,$C3,$C3,$C3,$C3,$C3  ; TL
 	.byte $F0,$10,$10,$10,$10,$10,$10,$10,$F0,$F0,$F0,$F0,$F0,$F0,$F0,$F0  ; TR
 	.byte $80,$80,$80,$FF,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$00,$00,$00,$00  ; BL
 	.byte $10,$10,$10,$F0,$00,$00,$00,$00,$F0,$F0,$F0,$F0,$00,$00,$00,$00  ; BR
-; $0F–$20 title flat shipping box (6×3 tiles) — front view
+; $0F-$20 title flat shipping box (6×3 tiles) — front view
 ; 0=black outline/icons  1=light panel+label  2=cardboard  3=red tape/border
 	.byte $00,$00,$3F,$3F,$3F,$3F,$3F,$3F,$00,$00,$00,$00,$00,$00,$00,$00  ; 0
 	.byte $00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$F8,$F8,$88,$D8,$D8,$F8  ; 1
@@ -234,7 +234,7 @@ player_s_3_walk:
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$01,$6D,$45,$6D,$6D,$01,$00,$00  ; 15
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$01,$45,$39,$39,$45,$01,$00,$00  ; 16
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$6C,$00,$6C,$6C,$00,$00,$00  ; 17
-; $21–$40 delivery truck 8×4 — large blue van + VS on side, facing right
+; $21-$40 delivery truck 8×4 — large blue van + VS on side, facing right
 ; 0=black outline/tires  1=blue body  2=white (VS/window)  3=red accents
 	.byte $00,$00,$00,$1F,$1F,$1F,$1F,$1F,$00,$00,$00,$00,$00,$00,$00,$00  ; 0
 	.byte $00,$00,$00,$FF,$1F,$8F,$C7,$E3,$00,$00,$00,$00,$E0,$70,$38,$1C  ; 1
@@ -482,7 +482,7 @@ update_title:
 	rts
 
 draw_title_screen:
-	; Flat shipping box 6×3 tiles, rows 9–11, cols 13–18 (centered)
+	; Flat shipping box 6×3 tiles, rows 9-11, cols 13-18 (centered)
 	; $2000 + 9*32 + 13 = $212D
 	lda #$21
 	sta PPUADDR
@@ -557,7 +557,7 @@ draw_title_screen:
 	sta PPUDATA
 	dex
 	bne @attr
-	; rows 8–11, cols 12–19 → attr $D3,$D4  (and $D5 for col 20 edge)
+	; rows 8-11, cols 12-19 → attr $D3,$D4  (and $D5 for col 20 edge)
 	lda #$23
 	sta PPUADDR
 	lda #$D3
@@ -2196,11 +2196,11 @@ pp_row_nt0:
 	rts
 
 draw_warehouse:
-	; Tall warehouse cols 0–13, ceiling row 5, walls rows 6–20
-	; Right wall cols 12–13 with doorway rows 17–20 open
+	; Tall warehouse cols 0-13, ceiling row 5, walls rows 6-20
+	; Right wall cols 12-13 with doorway rows 17-20 open
 	bit PPUSTATUS
 
-	; Ceiling row 5, cols 0–13: $2000+5*32 = $20A0
+	; Ceiling row 5, cols 0-13: $2000+5*32 = $20A0
 	lda #$20
 	sta PPUADDR
 	lda #$A0
@@ -2212,7 +2212,7 @@ draw_warehouse:
 	dex
 	bne @ceil
 
-	; Left wall cols 0–1, rows 6–20
+	; Left wall cols 0-1, rows 6-20
 	ldx #6
 @left:
 	jsr pp_row_nt0
@@ -2223,7 +2223,7 @@ draw_warehouse:
 	cpx #21
 	bcc @left
 
-	; Right wall cols 12–13, rows 6–16 only (door below)
+	; Right wall cols 12-13, rows 6-16 only (door below)
 	ldx #6
 @right:
 	txa
@@ -2258,11 +2258,11 @@ draw_warehouse:
 	cpx #17
 	bcc @right
 
-	; Door frame lintel row 16, cols 12–13 (top of opening)
-	; already drawn as wall row 16. Opening rows 17–20 empty (sky).
+	; Door frame lintel row 16, cols 12-13 (top of opening)
+	; already drawn as wall row 16. Opening rows 17-20 empty (sky).
 
 	; Shelves with side gaps so you can drop off (match collision X ranges)
-	; High shelf row 12 (y=96), cols 4–8 (x 32–72)
+	; High shelf row 12 (y=96), cols 4-8 (x 32-72)
 	lda #$21
 	sta PPUADDR
 	lda #$84                ; 12*32+4 = $184 → $2184
@@ -2274,7 +2274,7 @@ draw_warehouse:
 	dex
 	bne @sh
 
-	; Mid shelf row 15 (y=120), cols 6–10 (x 48–88)
+	; Mid shelf row 15 (y=120), cols 6-10 (x 48-88)
 	lda #$21
 	sta PPUADDR
 	lda #$E6                ; 15*32+6 = $1E6 → $21E6
@@ -2286,7 +2286,7 @@ draw_warehouse:
 	dex
 	bne @sm
 
-	; Low shelf row 18 (y=144), cols 3–7 (x 24–64)
+	; Low shelf row 18 (y=144), cols 3-7 (x 24-64)
 	lda #$22
 	sta PPUADDR
 	lda #$43                ; 18*32+3 = $243 → $2243
@@ -2330,8 +2330,8 @@ draw_platform_tiles:
 	rts
 
 draw_truck:
-	; 8×4 truck above ground (row 21). NT1 cols 20–27, rows 17–20.
-	; world X ≈ 416–479.  $2400 + 17*32 + 20 = $2634
+	; 8×4 truck above ground (row 21). NT1 cols 20-27, rows 17-20.
+	; world X ≈ 416-479.  $2400 + 17*32 + 20 = $2634
 	bit PPUSTATUS
 	ldx #0
 	; row 17
@@ -2387,8 +2387,8 @@ draw_truck:
 	cpx #32
 	bne @r3
 
-	; Palette 3 on NT1 attrs covering cols 20–27, rows 16–23
-	; attr row4 col5–6 ($27E5–$E6), row5 col5–6 ($27ED–$EE)
+	; Palette 3 on NT1 attrs covering cols 20-27, rows 16-23
+	; attr row4 col5-6 ($27E5-$E6), row5 col5-6 ($27ED-$EE)
 	lda #$27
 	sta PPUADDR
 	lda #$E5
