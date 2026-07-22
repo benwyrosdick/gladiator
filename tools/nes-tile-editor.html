@@ -40,7 +40,6 @@
   header .hint { color: var(--muted); font-size: 12px; }
   main {
     display: grid;
-    /* ~16 hex bytes + .byte prefix ≈ 100+ chars; keep on one line */
     grid-template-columns: 1fr minmax(560px, 42vw);
     gap: 0;
     min-height: calc(100vh - 52px);
@@ -94,15 +93,6 @@
     font: inherit;
   }
   input[type="number"] { width: 56px; }
-  input[type="color"] {
-    width: 36px;
-    height: 28px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0;
-    background: transparent;
-    cursor: pointer;
-  }
   button, .btn {
     background: var(--bg);
     border: 1px solid var(--border);
@@ -120,6 +110,10 @@
     font-weight: 600;
   }
   button.primary:hover { filter: brightness(1.08); color: #1a1b26; }
+  button.active-tab {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
   .palette {
     display: flex;
     gap: 8px;
@@ -140,6 +134,14 @@
     bottom: 2px;
     right: 4px;
     font-size: 10px;
+    color: #fff;
+    text-shadow: 0 0 2px #000, 0 0 2px #000;
+  }
+  .swatch .hex {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 9px;
     color: #fff;
     text-shadow: 0 0 2px #000, 0 0 2px #000;
   }
@@ -174,7 +176,7 @@
   }
   textarea {
     width: 100%;
-    min-height: 220px;
+    min-height: 180px;
     flex: 1;
     background: var(--bg);
     border: 1px solid var(--border);
@@ -185,6 +187,10 @@
     resize: vertical;
     white-space: pre;
     overflow-x: auto;
+  }
+  textarea.pal-ta {
+    min-height: 140px;
+    flex: none;
   }
   .status {
     font-size: 12px;
@@ -202,12 +208,107 @@
     background: var(--border);
     margin: 4px 0;
   }
+  .pal-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .pal-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+  .pal-row:hover { border-color: var(--border); }
+  .pal-row.active {
+    border-color: var(--accent);
+    background: rgba(122, 162, 247, 0.08);
+  }
+  .pal-row .tag {
+    width: 52px;
+    font-size: 11px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .pal-row.active .tag { color: var(--accent); }
+  .pal-row .slots {
+    display: flex;
+    gap: 4px;
+  }
+  .pal-slot {
+    width: 36px;
+    height: 36px;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    position: relative;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+  }
+  .pal-slot.editing { border-color: var(--accent2); }
+  .pal-slot .idx {
+    position: absolute;
+    bottom: 1px;
+    right: 3px;
+    font-size: 9px;
+    color: #fff;
+    text-shadow: 0 0 2px #000;
+  }
+  .nes-master {
+    display: grid;
+    grid-template-columns: repeat(16, 1fr);
+    gap: 2px;
+    max-width: 520px;
+  }
+  .nes-cell {
+    aspect-ratio: 1;
+    min-width: 0;
+    border-radius: 2px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+  }
+  .nes-cell:hover { border-color: #fff; }
+  .nes-cell.selected { border-color: var(--accent); }
+  .nes-cell.forbidden {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  .hint-sm {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  details.pal-details {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    background: var(--bg);
+  }
+  details.pal-details > summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    user-select: none;
+  }
+  details.pal-details[open] > summary {
+    margin-bottom: 8px;
+    color: var(--text);
+  }
 </style>
 </head>
 <body>
 <header>
   <h1>NES Tile Editor</h1>
-  <span class="hint">2bpp CHR · 16 bytes/tile · plane0 then plane1 · import/export ca65 <code>.byte</code></span>
+  <span class="hint">2bpp CHR · 16 bytes/tile · plane0 then plane1 · NES palettes · ca65 import/copy</span>
   <button type="button" id="btnSidebar" title="Toggle bytes sidebar (])">Hide bytes</button>
 </header>
 <main id="main">
@@ -223,16 +324,37 @@
     <div id="sheetWrap">
       <canvas id="sheet" width="128" height="64"></canvas>
     </div>
+
     <div class="row" style="margin-top:12px">
       <span class="panel-title" style="margin:0">Paint color</span>
       <div class="palette" id="palette"></div>
+      <span class="tile-info" id="palContext">bg pal 3</span>
     </div>
-    <div class="row">
-      <label>P0 <input type="color" id="c0" value="#0f0f0f" /></label>
-      <label>P1 <input type="color" id="c1" value="#f0d050" /></label>
-      <label>P2 <input type="color" id="c2" value="#e02020" /></label>
-      <label>P3 <input type="color" id="c3" value="#703010" /></label>
-      <button id="btnDefaultPal">Default</button>
+
+    <div class="pal-block" style="margin-top:14px; max-width:560px">
+      <div class="row">
+        <span class="panel-title" style="margin:0">NES palettes</span>
+        <button type="button" id="tabBg" class="active-tab">bg_palette</button>
+        <button type="button" id="tabSpr">spr_palette</button>
+      </div>
+      <p class="hint-sm">Click a row to paint with it. Click a color slot, then pick from the master palette below.</p>
+      <div id="palRows"></div>
+
+      <details class="pal-details" open>
+        <summary>Master NES palette (PPU $00–$3F)</summary>
+        <div class="nes-master" id="nesMaster"></div>
+        <p class="hint-sm" style="margin-top:6px" id="editHint">Select a slot above to recolor it.</p>
+      </details>
+
+      <details class="pal-details">
+        <summary>Paste / copy ca65 palettes</summary>
+        <textarea class="pal-ta" id="palBytes" spellcheck="false" placeholder="bg_palette:&#10;    .byte $0F, $21, $11, $30&#10;…"></textarea>
+        <div class="row" style="margin-top:8px">
+          <button class="primary" id="btnImportPal">Import palettes</button>
+          <button id="btnCopyPal">Copy</button>
+          <button id="btnDefaultPal">Game defaults</button>
+        </div>
+      </details>
     </div>
   </section>
 
@@ -243,14 +365,13 @@
     </div>
     <div class="row">
       <button class="primary" id="btnImport">Import ←</button>
-      <button class="primary" id="btnExport">Export →</button>
       <button id="btnCopy">Copy</button>
     </div>
     <p class="status" id="status"></p>
     <div class="divider"></div>
-    <p class="panel-title">ca65 bytes (paste / edit result)</p>
+    <p class="panel-title">ca65 tile bytes (paste / copy)</p>
     <textarea id="bytes" spellcheck="false" placeholder=".byte $00,$00,..."></textarea>
-    <p class="hint" style="margin:0;color:var(--muted);font-size:11px">
+    <p class="hint-sm">
       Each tile = 16 bytes: 8× plane0 rows, then 8× plane1. Color = p0 + 2×p1.
       Click/drag on the grid to paint. Right-click = color 0.
     </p>
@@ -261,28 +382,86 @@
 (function () {
   "use strict";
 
+  /* Approximate NTSC NES PPU palette (RGB24). Indices $0D/$1D and $0E/$1E/$2E/$3E
+     are black/unused on real hardware; kept for complete $00–$3F table. */
+  const NES_RGB = [
+    "#545454","#001e74","#081090","#300088","#440064","#5c0030","#540400","#3c1800",
+    "#202a00","#083a00","#004000","#003c00","#00323c","#000000","#000000","#000000",
+    "#989698","#084cc4","#3032ec","#5c1ee4","#8814b0","#a01464","#982220","#783c00",
+    "#545a00","#287200","#087c00","#007628","#006678","#000000","#000000","#000000",
+    "#eceeec","#4c9aec","#787cec","#b062ec","#e454ec","#ec58b4","#ec6a64","#d48820",
+    "#a0aa00","#74c400","#4cd020","#38cc6c","#38b4cc","#3c3c3c","#000000","#000000",
+    "#eceeec","#a8ccec","#bcbcec","#d4b2ec","#ecaeec","#ecaed4","#ecb4b0","#e4c490",
+    "#ccd278","#b4de78","#a8e290","#98e2b4","#a0d6e4","#a0a2a0","#000000","#000000",
+  ];
+
+  /** Default from VESYL Shipper main.s */
+  const DEFAULT_BG = [
+    [0x0f, 0x21, 0x11, 0x30],
+    [0x0f, 0x37, 0x27, 0x16],
+    [0x0f, 0x00, 0x10, 0x20],
+    [0x0f, 0x28, 0x16, 0x07],
+  ];
+  const DEFAULT_SPR = [
+    [0x0f, 0x27, 0x17, 0x30],
+    [0x0f, 0x30, 0x27, 0x16],
+    [0x0f, 0x00, 0x10, 0x20],
+    [0x0f, 0x28, 0x16, 0x07],
+  ];
+
   const canvas = document.getElementById("sheet");
   const ctx = canvas.getContext("2d");
   const bytesEl = document.getElementById("bytes");
+  const palBytesEl = document.getElementById("palBytes");
   const statusEl = document.getElementById("status");
   const hoverInfo = document.getElementById("hoverInfo");
   const labelEl = document.getElementById("label");
+  const palContext = document.getElementById("palContext");
+  const editHint = document.getElementById("editHint");
 
   let cols = 8;
   let rows = 4;
   let zoom = 16;
   let paintColor = 1;
-  /** @type {Uint8Array} length = cols*rows*16 */
+  /** @type {Uint8Array} */
   let chr = new Uint8Array(cols * rows * 16);
-  let palette = ["#0f0f0f", "#f0d050", "#e02020", "#703010"];
   let painting = false;
   let lastPaintKey = "";
 
+  /** @type {{ bg: number[][], spr: number[][] }} four rows × four NES color indices */
+  let nesPal = {
+    bg: DEFAULT_BG.map((r) => r.slice()),
+    spr: DEFAULT_SPR.map((r) => r.slice()),
+  };
+  /** @type {"bg"|"spr"} */
+  let palBank = "bg";
+  let palRow = 3; // truck palette by default (matches delivery truck art)
+  /** Slot being edited with master palette, or null */
+  let editSlot = null; // 0..3 or null
+
   function tileCount() { return cols * rows; }
+
+  function activeRow() {
+    return nesPal[palBank][palRow];
+  }
+
+  function cssColor(nesIdx) {
+    return NES_RGB[nesIdx & 0x3f] || "#000000";
+  }
+
+  /** Paint colors 0–3 as CSS from active NES sub-palette */
+  function paintPalette() {
+    const row = activeRow();
+    return [0, 1, 2, 3].map((i) => cssColor(row[i]));
+  }
 
   function setStatus(msg, kind) {
     statusEl.textContent = msg || "";
     statusEl.className = "status" + (kind ? " " + kind : "");
+  }
+
+  function hexByte(n) {
+    return "$" + (n & 0xff).toString(16).toUpperCase().padStart(2, "0");
   }
 
   function resizeChr(newCols, newRows) {
@@ -318,10 +497,6 @@
     chr[base + 8 + y] = (chr[base + 8 + y] & mask) | (p1 << bit);
   }
 
-  function hexByte(n) {
-    return "$" + n.toString(16).toUpperCase().padStart(2, "0");
-  }
-
   function exportBytes() {
     const label = (labelEl.value || "tiles").trim().replace(/\s+/g, "_");
     const lines = [label + ":"];
@@ -335,10 +510,115 @@
     return lines.join("\n") + "\n";
   }
 
+  function exportPalettes() {
+    const comments = {
+      bg: [
+        "sky / white text",
+        "package: light card, body, red tape",
+        "asphalt gray",
+        "truck: yellow, red, dark brown",
+      ],
+      spr: [
+        "player",
+        "package: white label, cardboard, red outline",
+        "",
+        "truck",
+      ],
+    };
+    function block(name, rows, cmt) {
+      const lines = [name + ":"];
+      for (let i = 0; i < 4; i++) {
+        const parts = rows[i].map(hexByte).join(", ");
+        const note = cmt[i] ? "   ; " + cmt[i] : "";
+        lines.push("\t.byte " + parts + note);
+      }
+      return lines.join("\n");
+    }
+    return (
+      block("bg_palette", nesPal.bg, comments.bg) +
+      "\n\n" +
+      block("spr_palette", nesPal.spr, comments.spr) +
+      "\n"
+    );
+  }
+
+  /**
+   * Parse ca65 palette paste. Accepts bg_palette / spr_palette labels and
+   * loose .byte rows (first 4 rows → bg, next 4 → spr if no labels).
+   */
+  function parsePalettes(text) {
+    if (!text || !text.trim()) throw new Error("Palette text is empty");
+
+    // Strip comments
+    const cleaned = text.replace(/;.*$/gm, "\n");
+
+    function extractBytes(chunk) {
+      const bytes = [];
+      const re = /\$([0-9A-Fa-f]{1,2})\b|0x([0-9A-Fa-f]{1,2})\b/g;
+      let m;
+      while ((m = re.exec(chunk)) !== null) {
+        bytes.push(parseInt(m[1] || m[2], 16) & 0xff);
+      }
+      return bytes;
+    }
+
+    function toRows(bytes) {
+      if (bytes.length < 4) throw new Error("Need at least 4 palette bytes");
+      const rows = [];
+      const n = Math.min(4, Math.floor(bytes.length / 4));
+      for (let i = 0; i < n; i++) {
+        rows.push([
+          bytes[i * 4] & 0x3f,
+          bytes[i * 4 + 1] & 0x3f,
+          bytes[i * 4 + 2] & 0x3f,
+          bytes[i * 4 + 3] & 0x3f,
+        ]);
+      }
+      // Pad to 4 rows if short
+      while (rows.length < 4) {
+        rows.push([0x0f, 0x00, 0x10, 0x20]);
+      }
+      return rows;
+    }
+
+    // Split on bg_palette: / spr_palette: labels (case-insensitive)
+    const bgMatch = cleaned.match(/bg_palette\s*:([\s\S]*?)(?=spr_palette\s*:|$)/i);
+    const sprMatch = cleaned.match(/spr_palette\s*:([\s\S]*?)(?=bg_palette\s*:|$)/i);
+
+    let imported = [];
+    if (bgMatch) {
+      nesPal.bg = toRows(extractBytes(bgMatch[1]));
+      imported.push("bg_palette");
+    }
+    if (sprMatch) {
+      nesPal.spr = toRows(extractBytes(sprMatch[1]));
+      imported.push("spr_palette");
+    }
+
+    if (!bgMatch && !sprMatch) {
+      // Unlabeled: take sequential groups of 4×4
+      const all = extractBytes(cleaned);
+      if (all.length < 4) throw new Error("No palette bytes found ($NN)");
+      if (all.length >= 32) {
+        nesPal.bg = toRows(all.slice(0, 16));
+        nesPal.spr = toRows(all.slice(16, 32));
+        imported.push("bg_palette", "spr_palette");
+      } else if (all.length >= 16) {
+        nesPal[palBank] = toRows(all.slice(0, 16));
+        imported.push(palBank === "bg" ? "bg_palette" : "spr_palette");
+      } else {
+        // Partial row(s) into active bank
+        const rows = toRows(all);
+        for (let i = 0; i < rows.length; i++) nesPal[palBank][i] = rows[i];
+        imported.push(palBank === "bg" ? "bg_palette (partial)" : "spr_palette (partial)");
+      }
+    }
+
+    return imported;
+  }
+
   function parseImport(text) {
-    // Pull all hex bytes: $NN or 0xNN or bare hex pairs after .byte
     const cleaned = text.replace(/;.*$/gm, "");
-    // Capture label if present
     const labelMatch = cleaned.match(/^\s*([A-Za-z_][\w]*)\s*:/m);
     if (labelMatch) labelEl.value = labelMatch[1];
 
@@ -356,11 +636,9 @@
       );
     }
     const nTiles = bytes.length / 16;
-    // Fit into grid: keep cols if divides evenly, else pick cols
     let newCols = cols;
     let newRows = Math.ceil(nTiles / newCols);
     if (newCols * newRows !== nTiles) {
-      // try common widths
       const candidates = [8, 4, 6, 2, 1, 16, nTiles];
       let found = false;
       for (const c of candidates) {
@@ -390,8 +668,8 @@
     canvas.width = w * zoom;
     canvas.height = h * zoom;
     ctx.imageSmoothingEnabled = false;
+    const pal = paintPalette();
 
-    // checker for color 0
     for (let py = 0; py < h; py++) {
       for (let px = 0; px < w; px++) {
         const tx = (px / 8) | 0;
@@ -400,18 +678,19 @@
         const ly = py & 7;
         const ti = ty * cols + tx;
         const c = getPixel(ti, lx, ly);
-        let fill = palette[c];
+        let fill = pal[c];
         if (c === 0) {
-          // subtle checker so color 0 is visible on black
+          // Show true NES color0, with subtle checker so pure black is visible
           const chk = ((px >> 1) + (py >> 1)) & 1;
-          fill = chk ? "#1a1a1a" : "#0a0a0a";
+          if (fill === "#000000" || fill === "#0a0a0a") {
+            fill = chk ? "#1a1a1a" : "#0a0a0a";
+          }
         }
         ctx.fillStyle = fill;
         ctx.fillRect(px * zoom, py * zoom, zoom, zoom);
       }
     }
 
-    // tile grid
     ctx.strokeStyle = "rgba(122,162,247,0.35)";
     ctx.lineWidth = 1;
     for (let x = 0; x <= cols; x++) {
@@ -427,7 +706,6 @@
       ctx.stroke();
     }
 
-    // pixel grid (light)
     if (zoom >= 10) {
       ctx.strokeStyle = "rgba(255,255,255,0.06)";
       for (let x = 0; x <= w; x++) {
@@ -447,6 +725,10 @@
 
   function syncExport() {
     bytesEl.value = exportBytes();
+  }
+
+  function syncPalExport() {
+    palBytesEl.value = exportPalettes();
   }
 
   function canvasPos(e) {
@@ -470,30 +752,145 @@
     setPixel(ti, lx, ly, color);
     draw();
     syncExport();
-    hoverInfo.textContent = "tile " + ti + " · (" + lx + "," + ly + ") = " + color;
+    const nes = activeRow()[color];
+    hoverInfo.textContent =
+      "tile " + ti + " · (" + lx + "," + ly + ") = " + color +
+      " (" + hexByte(nes) + ")";
   }
 
-  function buildPaletteUI() {
+  function buildPaintSwatches() {
     const root = document.getElementById("palette");
     root.innerHTML = "";
+    const row = activeRow();
+    const pal = paintPalette();
     for (let i = 0; i < 4; i++) {
       const d = document.createElement("div");
       d.className = "swatch" + (i === paintColor ? " active" : "");
-      d.style.background = i === 0
-        ? "repeating-conic-gradient(#333 0% 25%, #111 0% 50%) 50% / 12px 12px"
-        : palette[i];
-      if (i === 0) d.style.backgroundColor = palette[0];
-      d.innerHTML = "<span>" + i + "</span>";
-      d.title = "Color " + i + (i === 0 ? " (transparent/backdrop)" : "");
+      d.style.background = pal[i];
+      d.innerHTML =
+        '<span class="hex">' + hexByte(row[i]) + "</span><span>" + i + "</span>";
+      d.title =
+        "Color " + i + " = " + hexByte(row[i]) +
+        (i === 0 ? " (universal backdrop / transparent for sprites)" : "");
       d.addEventListener("click", () => {
         paintColor = i;
-        buildPaletteUI();
+        editSlot = i;
+        buildPaintSwatches();
+        buildPalRows();
+        buildMaster();
+        updatePalContext();
       });
       root.appendChild(d);
     }
-    ["c0", "c1", "c2", "c3"].forEach((id, i) => {
-      document.getElementById(id).value = palette[i];
-    });
+  }
+
+  function updatePalContext() {
+    palContext.textContent =
+      (palBank === "bg" ? "bg" : "spr") + " pal " + palRow +
+      (editSlot !== null ? " · edit slot " + editSlot : "");
+    editHint.textContent =
+      editSlot !== null
+        ? "Click a master color to set " +
+          (palBank === "bg" ? "bg" : "spr") +
+          "_palette[" + palRow + "][" + editSlot + "]"
+        : "Select a slot (paint color or row swatch) to recolor it.";
+  }
+
+  function buildPalRows() {
+    const root = document.getElementById("palRows");
+    root.innerHTML = "";
+    const bank = nesPal[palBank];
+    for (let r = 0; r < 4; r++) {
+      const rowEl = document.createElement("div");
+      rowEl.className = "pal-row" + (r === palRow ? " active" : "");
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = "pal " + r;
+      rowEl.appendChild(tag);
+      const slots = document.createElement("div");
+      slots.className = "slots";
+      for (let s = 0; s < 4; s++) {
+        const cell = document.createElement("div");
+        cell.className =
+          "pal-slot" +
+          (r === palRow && editSlot === s ? " editing" : "");
+        cell.style.background = cssColor(bank[r][s]);
+        cell.innerHTML = '<span class="idx">' + hexByte(bank[r][s]) + "</span>";
+        cell.title = "Slot " + s + " = " + hexByte(bank[r][s]);
+        cell.addEventListener("click", (e) => {
+          e.stopPropagation();
+          palRow = r;
+          editSlot = s;
+          paintColor = s;
+          buildPaintSwatches();
+          buildPalRows();
+          buildMaster();
+          updatePalContext();
+          draw();
+        });
+        slots.appendChild(cell);
+      }
+      rowEl.appendChild(slots);
+      rowEl.addEventListener("click", () => {
+        palRow = r;
+        buildPaintSwatches();
+        buildPalRows();
+        buildMaster();
+        updatePalContext();
+        draw();
+      });
+      root.appendChild(rowEl);
+    }
+  }
+
+  function buildMaster() {
+    const root = document.getElementById("nesMaster");
+    root.innerHTML = "";
+    const current =
+      editSlot !== null ? activeRow()[editSlot] : -1;
+    for (let i = 0; i < 64; i++) {
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className =
+        "nes-cell" +
+        (i === current ? " selected" : "") +
+        ((i & 0x0f) === 0x0e || (i & 0x0f) === 0x0f ? " forbidden" : "");
+      cell.style.background = NES_RGB[i];
+      cell.title = hexByte(i);
+      cell.addEventListener("click", () => {
+        if (editSlot === null) {
+          setStatus("Select a palette slot first, then pick a NES color", "err");
+          return;
+        }
+        activeRow()[editSlot] = i & 0x3f;
+        // Mirror universal backdrop: color0 of every BG row often matches
+        // (optional — only update current bank color0 if slot 0)
+        buildPaintSwatches();
+        buildPalRows();
+        buildMaster();
+        updatePalContext();
+        draw();
+        syncPalExport();
+        setStatus(
+          "Set " + (palBank === "bg" ? "bg" : "spr") +
+            " pal " + palRow + " slot " + editSlot + " = " + hexByte(i),
+          "ok"
+        );
+      });
+      root.appendChild(cell);
+    }
+  }
+
+  function setBank(bank) {
+    palBank = bank;
+    document.getElementById("tabBg").classList.toggle("active-tab", bank === "bg");
+    document.getElementById("tabSpr").classList.toggle("active-tab", bank === "spr");
+    editSlot = null;
+    buildPaintSwatches();
+    buildPalRows();
+    buildMaster();
+    updatePalContext();
+    draw();
   }
 
   // Events
@@ -513,8 +910,10 @@
     if (x >= 0 && y >= 0 && x < cols * 8 && y < rows * 8) {
       const ti = ((y / 8) | 0) * cols + ((x / 8) | 0);
       const c = getPixel(ti, x & 7, y & 7);
+      const nes = activeRow()[c];
       hoverInfo.textContent =
-        "tile " + ti + " · (" + (x & 7) + "," + (y & 7) + ") = " + c;
+        "tile " + ti + " · (" + (x & 7) + "," + (y & 7) + ") = " + c +
+        " (" + hexByte(nes) + ")";
     }
     if (painting) {
       const color = e.buttons === 2 ? 0 : paintColor;
@@ -560,38 +959,66 @@
     }
   });
 
-  document.getElementById("btnExport").addEventListener("click", () => {
-    syncExport();
-    setStatus("Exported " + tileCount() + " tiles", "ok");
-  });
-
   document.getElementById("btnCopy").addEventListener("click", async () => {
     syncExport();
     try {
       await navigator.clipboard.writeText(bytesEl.value);
-      setStatus("Copied to clipboard", "ok");
+      setStatus("Copied tiles to clipboard", "ok");
     } catch {
       bytesEl.select();
       document.execCommand("copy");
-      setStatus("Copied (fallback)", "ok");
+      setStatus("Copied tiles (fallback)", "ok");
     }
   });
 
-  ["c0", "c1", "c2", "c3"].forEach((id, i) => {
-    document.getElementById(id).addEventListener("input", (e) => {
-      palette[i] = e.target.value;
-      buildPaletteUI();
+  document.getElementById("tabBg").addEventListener("click", () => setBank("bg"));
+  document.getElementById("tabSpr").addEventListener("click", () => setBank("spr"));
+
+  document.getElementById("btnImportPal").addEventListener("click", () => {
+    try {
+      const which = parsePalettes(palBytesEl.value);
+      buildPaintSwatches();
+      buildPalRows();
+      buildMaster();
+      updatePalContext();
       draw();
-    });
+      syncPalExport();
+      setStatus("Imported " + which.join(" + "), "ok");
+    } catch (err) {
+      setStatus(String(err.message || err), "err");
+    }
+  });
+
+  document.getElementById("btnCopyPal").addEventListener("click", async () => {
+    syncPalExport();
+    try {
+      await navigator.clipboard.writeText(palBytesEl.value);
+      setStatus("Copied palettes to clipboard", "ok");
+    } catch {
+      palBytesEl.select();
+      document.execCommand("copy");
+      setStatus("Copied palettes (fallback)", "ok");
+    }
   });
 
   document.getElementById("btnDefaultPal").addEventListener("click", () => {
-    palette = ["#0f0f0f", "#f0d050", "#e02020", "#703010"];
-    buildPaletteUI();
+    nesPal.bg = DEFAULT_BG.map((r) => r.slice());
+    nesPal.spr = DEFAULT_SPR.map((r) => r.slice());
+    palBank = "bg";
+    palRow = 3;
+    editSlot = null;
+    document.getElementById("tabBg").classList.add("active-tab");
+    document.getElementById("tabSpr").classList.remove("active-tab");
+    buildPaintSwatches();
+    buildPalRows();
+    buildMaster();
+    updatePalContext();
     draw();
+    syncPalExport();
+    setStatus("Restored VESYL default palettes", "ok");
   });
 
-  // Sidebar collapse (more room for painting)
+  // Sidebar collapse
   const mainEl = document.getElementById("main");
   const btnSidebar = document.getElementById("btnSidebar");
   function setSidebarCollapsed(collapsed) {
@@ -615,6 +1042,19 @@
       e.preventDefault();
       toggleSidebar();
     }
+    // 1–4 select paint color
+    if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+      const t = e.target;
+      if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT")) return;
+      if (e.key >= "1" && e.key <= "4") {
+        paintColor = e.key.charCodeAt(0) - 49;
+        editSlot = paintColor;
+        buildPaintSwatches();
+        buildPalRows();
+        buildMaster();
+        updatePalContext();
+      }
+    }
   });
   try {
     if (localStorage.getItem("nes-tile-editor-sidebar") === "1") {
@@ -622,14 +1062,18 @@
     }
   } catch (_) {}
 
-  // Seed with empty truck-sized sheet + sample comment
+  // Seed
   bytesEl.value =
-    "; Paste ca65 .byte lines here, then Import\n" +
-    "; Or paint on the grid and Export / Copy\n";
-  buildPaletteUI();
+    "; Paste ca65 .byte tile lines here, then Import\n" +
+    "; Or paint on the grid and Copy\n";
+  palBytesEl.value = exportPalettes();
+  buildPaintSwatches();
+  buildPalRows();
+  buildMaster();
+  updatePalContext();
   draw();
   syncExport();
-  setStatus("Ready — import bytes or paint tiles", "ok");
+  setStatus("Ready — import tiles/palettes or paint", "ok");
 })();
 </script>
 </body>
