@@ -82,27 +82,32 @@ LEVEL_W_PX_L = $00          ; level width 512 = $0200
 LEVEL_W_PX_H = $02
 MAX_SCROLL_L = $00          ; 512-256 = 256
 MAX_SCROLL_H = $01
-GROUND_TOP_Y = 168          ; pixel Y of ground surface (row 21)
-; nametable rows: ground top at row 21 (21*8=168)
+GROUND_TOP_Y = 176          ; pixel Y of ground surface (row 22)
+; nametable rows: ground top at row 22 (22*8=176)
+; Truck wheels on row 21 (attr top) + ground on row 22 (attr bottom) → no pal bleed
 
 ; Warehouse geometry (NT0 / world X 0-127)
 WH_LEFT       = 16          ; left wall solid x < 16 (cols 0-1)
 WH_RIGHT_L    = 96          ; right wall cols 12-13 → x 96-112
 WH_RIGHT_R    = 112
-WH_DOOR_TOP   = 136         ; open doorway for y >= 136 (tile rows 17+)
+WH_DOOR_TOP   = 144         ; open doorway for y >= 144 (tile rows 18+)
 WH_CEILING    = 40          ; bottom of ceiling (row 5 → y 40)
 
 ; Climbable shelves (platform tops), ~24px steps (within jump height)
 ; X ranges leave gaps from walls so you can drop off a side
-SHELF_LOW_Y   = 144         ; row 18, x 24-64 (cols 3-7)
-SHELF_MID_Y   = 120         ; row 15, x 48-88 (cols 6-10)
-SHELF_HIGH_Y  = 96          ; row 12, x 32-72 (cols 4-8) — package here
+SHELF_LOW_Y   = 152         ; row 19, x 24-64 (cols 3-7)
+SHELF_MID_Y   = 128         ; row 16, x 48-88 (cols 6-10)
+SHELF_HIGH_Y  = 104         ; row 13, x 32-72 (cols 4-8) — package here
 SHELF_LOW_L   = 24
 SHELF_LOW_R   = 64
 SHELF_MID_L   = 48
 SHELF_MID_R   = 88
 SHELF_HIGH_L  = 32
 SHELF_HIGH_R  = 72
+
+; Outdoor platforms
+PLAT1_Y       = 144         ; row 18, world x 160-224
+PLAT2_Y       = 152         ; row 19, world x 320-384
 
 PKG_W         = 12
 PKG_H         = 12
@@ -235,40 +240,42 @@ player_s_3_walk:
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$01,$6D,$45,$6D,$6D,$01,$00,$00  ; 15
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$01,$45,$39,$39,$45,$01,$00,$00  ; 16
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$6C,$00,$6C,$6C,$00,$00,$00  ; 17
-; $21-$40 delivery truck 8x4 — large blue van + VS on side, facing right
-; 0=black outline/tires  1=blue body  2=white (VS/window)  3=red accents
-	.byte $00,$00,$00,$1F,$1F,$1F,$1F,$1F,$00,$00,$00,$00,$00,$00,$00,$00  ; 0
-	.byte $00,$00,$00,$FF,$1F,$8F,$C7,$E3,$00,$00,$00,$00,$E0,$70,$38,$1C  ; 1
-	.byte $00,$00,$00,$FF,$FF,$FF,$FF,$FE,$00,$00,$00,$00,$00,$00,$00,$01  ; 2
-	.byte $00,$00,$00,$FF,$C7,$8F,$1F,$3F,$00,$00,$00,$00,$38,$70,$E0,$C0  ; 3
-	.byte $00,$00,$00,$FF,$00,$00,$00,$1F,$00,$00,$00,$00,$FF,$FF,$FF,$E0  ; 4
-	.byte $00,$00,$00,$00,$10,$10,$10,$10,$00,$00,$00,$00,$00,$07,$07,$07  ; 5
-	.byte $00,$00,$00,$00,$02,$02,$02,$02,$00,$00,$00,$00,$00,$F8,$F8,$F8  ; 6
-	.byte $00,$00,$00,$00,$00,$00,$60,$40,$00,$00,$00,$00,$00,$00,$00,$00  ; 7
-	.byte $1F,$1F,$1F,$1F,$1F,$07,$17,$16,$00,$00,$00,$00,$00,$00,$10,$11  ; 8
-	.byte $F1,$F8,$FC,$FE,$FF,$FF,$FF,$00,$0E,$07,$03,$01,$00,$00,$00,$FF  ; 9
-	.byte $FC,$F8,$71,$23,$07,$8F,$07,$00,$03,$07,$8E,$DC,$F8,$70,$F8,$FF  ; 10
-	.byte $7F,$FF,$FF,$FF,$FF,$FF,$FF,$00,$80,$00,$00,$00,$00,$00,$00,$FF  ; 11
-	.byte $1F,$00,$00,$00,$F8,$F8,$00,$00,$E0,$FF,$FF,$FF,$07,$07,$FF,$FF  ; 12
-	.byte $10,$10,$10,$1F,$1F,$1F,$1F,$1F,$07,$07,$00,$00,$00,$00,$00,$00  ; 13
-	.byte $02,$02,$02,$FE,$FE,$FE,$FE,$FE,$F8,$F8,$00,$00,$00,$00,$00,$00  ; 14
-	.byte $58,$58,$58,$40,$40,$50,$00,$00,$00,$00,$00,$00,$10,$10,$00,$00  ; 15
-	.byte $07,$00,$00,$00,$3F,$00,$00,$00,$01,$00,$00,$00,$3F,$00,$00,$00  ; 16
-	.byte $FF,$00,$FF,$FF,$FF,$00,$00,$00,$FF,$00,$00,$00,$FF,$00,$00,$0E  ; 17
-	.byte $FF,$00,$E0,$E0,$FF,$00,$00,$00,$FF,$00,$00,$00,$FF,$00,$00,$00  ; 18
-	.byte $FF,$00,$00,$00,$FF,$00,$00,$00,$FF,$00,$00,$00,$FF,$00,$00,$00  ; 19
-	.byte $FF,$00,$00,$00,$FF,$00,$00,$00,$FF,$00,$00,$00,$FF,$00,$00,$00  ; 20
-	.byte $1F,$00,$0F,$0F,$FF,$00,$00,$00,$00,$00,$00,$00,$FF,$00,$00,$00  ; 21
-	.byte $FE,$00,$FE,$FE,$FF,$00,$00,$00,$00,$00,$00,$00,$FF,$00,$00,$E0  ; 22
-	.byte $00,$00,$00,$00,$E0,$00,$00,$00,$00,$00,$00,$00,$E0,$00,$00,$00  ; 23
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 24
-	.byte $00,$04,$00,$00,$00,$00,$00,$00,$1F,$1F,$1F,$00,$00,$00,$00,$00  ; 25
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 26
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 27
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 28
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$01,$01,$01,$00,$00,$00,$00,$00  ; 29
-	.byte $00,$40,$00,$00,$00,$00,$00,$00,$F0,$F0,$F0,$00,$00,$00,$00,$00  ; 30
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 31
+; $21-$40 delivery truck 8x4 — yellow/red van, facing right
+; 0=empty (sky)  1=yellow body  2=red cab/lines  3=dark outline+tires (visible on black)
+delivery_truck_tiles:
+	.byte $00,$00,$00,$00,$7F,$80,$80,$8F,$00,$00,$00,$00,$00,$7F,$7F,$7F  ; 0
+	.byte $00,$00,$00,$00,$FF,$00,$00,$FC,$00,$00,$00,$00,$00,$FF,$FF,$FF  ; 1
+	.byte $00,$00,$00,$00,$FF,$00,$00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF  ; 2
+	.byte $00,$00,$00,$00,$FF,$00,$00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF  ; 3
+	.byte $00,$00,$00,$00,$FF,$00,$00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF  ; 4
+	.byte $00,$00,$00,$00,$FC,$02,$02,$02,$00,$00,$00,$00,$00,$FC,$FC,$FC  ; 5
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 6
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 7
+	.byte $9F,$80,$8F,$9F,$80,$8F,$9F,$80,$7F,$7F,$7F,$7F,$7F,$7F,$7F,$7F  ; 8
+	.byte $FE,$00,$FF,$FF,$00,$FF,$FF,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 9
+	.byte $00,$00,$E0,$F0,$00,$FF,$FF,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 10
+	.byte $00,$00,$00,$00,$00,$00,$80,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 11
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 12
+	.byte $02,$02,$02,$03,$02,$02,$02,$02,$FC,$FC,$FC,$FC,$FD,$FD,$FD,$FD  ; 13
+	.byte $00,$00,$00,$FF,$00,$00,$7F,$40,$00,$00,$00,$00,$FF,$FF,$80,$80  ; 14
+	.byte $00,$00,$00,$00,$80,$40,$20,$90,$00,$00,$00,$00,$00,$80,$C0,$60  ; 15
+	.byte $8F,$9F,$80,$80,$80,$80,$80,$80,$7F,$7F,$7F,$7F,$7F,$7F,$7F,$7F  ; 16
+	.byte $FF,$FF,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 17
+	.byte $FF,$FF,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 18
+	.byte $FE,$FF,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 19
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 20
+	.byte $02,$02,$02,$02,$02,$02,$02,$02,$FD,$FD,$FD,$FD,$FD,$FD,$FD,$FD  ; 21
+	.byte $40,$40,$40,$7F,$00,$60,$00,$00,$80,$80,$80,$80,$FF,$9F,$FF,$FF  ; 22
+	.byte $48,$24,$22,$E2,$02,$02,$02,$07,$30,$18,$1C,$1C,$FC,$FC,$FC,$F8  ; 23
+	.byte $80,$80,$83,$FE,$7C,$04,$06,$03,$7F,$7F,$7F,$07,$07,$07,$07,$03  ; 24
+	.byte $00,$00,$C3,$7E,$3C,$24,$66,$C3,$FF,$FF,$FF,$E7,$E7,$E7,$E7,$C3  ; 25
+	.byte $00,$00,$C0,$7F,$3F,$20,$60,$C0,$FF,$FF,$FF,$E0,$E0,$E0,$E0,$C0  ; 26
+	.byte $00,$00,$00,$FF,$FF,$00,$00,$00,$FF,$FF,$FF,$00,$00,$00,$00,$00  ; 27
+	.byte $00,$00,$00,$FF,$FF,$00,$00,$00,$FF,$FF,$FF,$00,$00,$00,$00,$00  ; 28
+	.byte $02,$02,$02,$FE,$FF,$00,$00,$00,$FD,$FD,$FD,$01,$00,$00,$00,$00  ; 29
+	.byte $00,$00,$07,$0C,$F8,$08,$0C,$07,$FF,$FF,$FF,$FF,$0F,$0F,$0F,$07  ; 30
+	.byte $07,$07,$87,$C1,$7F,$40,$C0,$80,$FA,$FA,$F8,$FE,$C0,$C0,$C0,$80  ; 31
+
 ; $41+ font: space, A-Z, !
 font_space:
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
@@ -349,13 +356,13 @@ bg_palette:
 	.byte $0F, $21, $11, $30   ; sky / white text
 	.byte $0F, $37, $27, $16   ; package: light card, body, red tape
 	.byte $0F, $00, $10, $20   ; asphalt gray
-	.byte $0F, $21, $30, $16   ; truck: blue body, white, red
+	.byte $0F, $28, $16, $07   ; truck: yellow, red, dark brown (not color0 — visible on black)
 
 spr_palette:
 	.byte $0F, $27, $17, $30   ; player
 	.byte $0F, $30, $27, $16   ; package: white label, cardboard, red outline
 	.byte $0F, $00, $10, $20
-	.byte $0F, $21, $30, $16   ; truck
+	.byte $0F, $28, $16, $07   ; truck
 
 ; Strings: tile indices relative to T_FONT (0=space, 1=A…), $FF end
 ; Helper: letter L means tile (L-'A'+1)
@@ -726,14 +733,14 @@ feet_on_any_platform:
 	bcs @yes
 @out1:
 	lda check_y
-	cmp #136                   ; outdoor plat 1
+	cmp #PLAT1_Y
 	bne @out2
 	jsr plat1_x_overlap
 	bcs @yes
 @out2:
-	; outdoor plat 2 also at y=144 (same as SHELF_LOW) — always test
+	; outdoor plat 2 may share Y with SHELF_LOW — always test
 	lda check_y
-	cmp #144
+	cmp #PLAT2_Y
 	bne @no
 	jsr plat2_x_overlap
 	bcs @yes
@@ -796,7 +803,7 @@ x_overlap_shelf_low:
 	clc
 	rts
 
-; outdoor platform 1 [160,224) y=136
+; outdoor platform 1 [160,224) y=PLAT1_Y
 plat1_x_overlap:
 	lda check_x_hi
 	bne @no
@@ -813,7 +820,7 @@ plat1_x_overlap:
 	clc
 	rts
 
-; outdoor platform 2 [320,384) y=144
+; outdoor platform 2 [320,384) y=PLAT2_Y
 plat2_x_overlap:
 	lda check_x_hi
 	cmp #1
@@ -1327,13 +1334,13 @@ try_land_shelf_low:
 
 try_land_plat1:
 	lda check_y
-	cmp #136
+	cmp #PLAT1_Y
 	bcc @no
-	cmp #144
+	cmp #PLAT1_Y + 8
 	bcs @no
 	jsr plat1_x_overlap
 	bcc @no
-	lda #136
+	lda #PLAT1_Y
 	sec
 	rts
 @no:
@@ -1342,13 +1349,13 @@ try_land_plat1:
 
 try_land_plat2:
 	lda check_y
-	cmp #144
+	cmp #PLAT2_Y
 	bcc @no
-	cmp #152
+	cmp #PLAT2_Y + 8
 	bcs @no
 	jsr plat2_x_overlap
 	bcc @no
-	lda #144
+	lda #PLAT2_Y
 	sec
 	rts
 @no:
@@ -2143,9 +2150,8 @@ build_level:
 
 	jsr draw_warehouse
 	jsr draw_platform_tiles
-	jsr draw_truck
 
-	; Attributes both NT
+	; Attributes both NT to palette 0 first, then truck (palette 3)
 	lda #$23
 	sta PPUADDR
 	lda #$C0
@@ -2167,17 +2173,20 @@ build_level:
 	sta PPUDATA
 	dex
 	bne @a1
+
+	; Draw truck last so its palette-3 attributes are not wiped
+	jsr draw_truck
 	rts
 
 ; A = nametable hi ($20 or $24)
 fill_ground_nt:
 	sta temp_hi
-	; row 21: ground top — addr = nt + 21*32 = nt + $2A0
+	; row 22: ground top — addr = nt + 22*32 = nt + $2C0
 	lda temp_hi
 	clc
 	adc #2
 	sta PPUADDR             ; $22 or $26
-	lda #$A0
+	lda #$C0
 	sta PPUADDR
 	ldx #32
 	lda #T_GROUND_TOP
@@ -2185,8 +2194,8 @@ fill_ground_nt:
 	sta PPUDATA
 	dex
 	bne @top
-	; rows 22-29: fill (8 rows)
-	ldy #8
+	; rows 23-29: fill (7 rows)
+	ldy #7
 @row:
 	ldx #32
 	lda #T_GROUND_FILL
@@ -2218,8 +2227,8 @@ pp_row_nt0:
 	rts
 
 draw_warehouse:
-	; Tall warehouse cols 0-13, ceiling row 5, walls rows 6-20
-	; Right wall cols 12-13 with doorway rows 17-20 open
+	; Tall warehouse cols 0-13, ceiling row 5, walls rows 6-21
+	; Right wall cols 12-13 with doorway rows 18-21 open
 	bit PPUSTATUS
 
 	; Ceiling row 5, cols 0-13: $2000+5*32 = $20A0
@@ -2275,7 +2284,7 @@ draw_warehouse:
 	dex
 	bne @sign_bot
 
-	; Left wall cols 0-1, rows 6-20
+	; Left wall cols 0-1, rows 6-21
 	ldx #6
 @left:
 	jsr pp_row_nt0
@@ -2283,10 +2292,10 @@ draw_warehouse:
 	sta PPUDATA
 	sta PPUDATA
 	inx
-	cpx #21
+	cpx #22
 	bcc @left
 
-	; Right wall cols 12-13, rows 6-16 only (door below)
+	; Right wall cols 12-13, rows 6-17 only (door below)
 	ldx #6
 @right:
 	txa
@@ -2318,17 +2327,16 @@ draw_warehouse:
 	sta PPUDATA
 	sta PPUDATA
 	inx
-	cpx #17
+	cpx #18
 	bcc @right
 
-	; Door frame lintel row 16, cols 12-13 (top of opening)
-	; already drawn as wall row 16. Opening rows 17-20 empty (sky).
+	; Door lintel row 17; opening rows 18-21 empty (sky) down to ground.
 
 	; Shelves with side gaps so you can drop off (match collision X ranges)
-	; High shelf row 12 (y=96), cols 4-8 (x 32-72)
+	; High shelf row 13 (y=104), cols 4-8 (x 32-72)
 	lda #$21
 	sta PPUADDR
-	lda #$84                ; 12*32+4 = $184 → $2184
+	lda #$A4                ; 13*32+4 = $1A4 → $21A4
 	sta PPUADDR
 	ldx #5
 	lda #T_PLATFORM
@@ -2337,10 +2345,10 @@ draw_warehouse:
 	dex
 	bne @sh
 
-	; Mid shelf row 15 (y=120), cols 6-10 (x 48-88)
-	lda #$21
+	; Mid shelf row 16 (y=128), cols 6-10 (x 48-88)
+	lda #$22
 	sta PPUADDR
-	lda #$E6                ; 15*32+6 = $1E6 → $21E6
+	lda #$06                ; 16*32+6 = $206 → $2206
 	sta PPUADDR
 	ldx #5
 	lda #T_PLATFORM
@@ -2349,10 +2357,10 @@ draw_warehouse:
 	dex
 	bne @sm
 
-	; Low shelf row 18 (y=144), cols 3-7 (x 24-64)
+	; Low shelf row 19 (y=152), cols 3-7 (x 24-64)
 	lda #$22
 	sta PPUADDR
-	lda #$43                ; 18*32+3 = $243 → $2243
+	lda #$63                ; 19*32+3 = $263 → $2263
 	sta PPUADDR
 	ldx #5
 	lda #T_PLATFORM
@@ -2366,10 +2374,10 @@ draw_platform_tiles:
 	; Outdoor platforms only (warehouse shelves drawn in draw_warehouse)
 	bit PPUSTATUS
 
-	; Platform 1: world px 160-224 (cols 20-27), top at y=136 → tile row 17
+	; Platform 1: world px 160-224 (cols 20-27), top at y=144 → tile row 18
 	lda #$22
 	sta PPUADDR
-	lda #$34
+	lda #$54                ; 18*32+20 = $254
 	sta PPUADDR
 	ldx #8
 	lda #T_PLATFORM
@@ -2378,11 +2386,11 @@ draw_platform_tiles:
 	dex
 	bne @p1
 
-	; Platform 2: world px 320-384 (NT1 cols 8-15), top at y=144 → tile row 18
+	; Platform 2: world px 320-384 (NT1 cols 8-15), top at y=152 → tile row 19
 	bit PPUSTATUS
 	lda #$26
 	sta PPUADDR
-	lda #$48
+	lda #$68                ; 19*32+8 = $268
 	sta PPUADDR
 	ldx #8
 	lda #T_PLATFORM
@@ -2393,14 +2401,15 @@ draw_platform_tiles:
 	rts
 
 draw_truck:
-	; 8x4 truck above ground (row 21). NT1 cols 20-27, rows 17-20.
-	; world X ≈ 416-479.  $2400 + 17*32 + 20 = $2634
+	; 8x4 truck, rows 18-21 (bottom y=175 ≈ ground y=176). NT1 cols 20-27.
+	; Wheels = attr row5 top (pal3); ground = attr row5 bottom (pal0) — no bleed.
+	; $2400 + 18*32 + 20 = $2654
 	bit PPUSTATUS
 	ldx #0
-	; row 17
+	; row 18
 	lda #$26
 	sta PPUADDR
-	lda #$34
+	lda #$54
 	sta PPUADDR
 @r0:
 	txa
@@ -2410,10 +2419,10 @@ draw_truck:
 	inx
 	cpx #8
 	bne @r0
-	; row 18 → $2654
+	; row 19
 	lda #$26
 	sta PPUADDR
-	lda #$54
+	lda #$74
 	sta PPUADDR
 @r1:
 	txa
@@ -2423,10 +2432,10 @@ draw_truck:
 	inx
 	cpx #16
 	bne @r1
-	; row 19 → $2674
+	; row 20
 	lda #$26
 	sta PPUADDR
-	lda #$74
+	lda #$94
 	sta PPUADDR
 @r2:
 	txa
@@ -2436,10 +2445,10 @@ draw_truck:
 	inx
 	cpx #24
 	bne @r2
-	; row 20 → $2694
+	; row 21 — wheels sit on ground line
 	lda #$26
 	sta PPUADDR
-	lda #$94
+	lda #$B4
 	sta PPUADDR
 @r3:
 	txa
@@ -2450,8 +2459,7 @@ draw_truck:
 	cpx #32
 	bne @r3
 
-	; Palette 3 on NT1 attrs covering cols 20-27, rows 16-23
-	; attr row4 col5-6 ($27E5-$E6), row5 col5-6 ($27ED-$EE)
+	; Palette 3 for truck body (rows 16-19 = attr row 4; 16-17 are sky/color0)
 	lda #$27
 	sta PPUADDR
 	lda #$E5
@@ -2459,11 +2467,12 @@ draw_truck:
 	lda #$FF
 	sta PPUDATA
 	sta PPUDATA
+	; Wheels rows 20-21 = top of attr row 5; ground 22-23 = bottom pal0
 	lda #$27
 	sta PPUADDR
 	lda #$ED
 	sta PPUADDR
-	lda #$FF
+	lda #$0F                ; top L/R = pal 3, bottom L/R = pal 0
 	sta PPUDATA
 	sta PPUDATA
 	rts

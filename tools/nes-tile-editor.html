@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NES Tile Editor</title>
+<style>
+  :root {
+    --bg: #1a1b26;
+    --panel: #24283b;
+    --border: #414868;
+    --text: #c0caf5;
+    --muted: #565f89;
+    --accent: #7aa2f7;
+    --accent2: #9ece6a;
+    --danger: #f7768e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 14px/1.4 "SF Mono", "Consolas", "Menlo", monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  header .hint { color: var(--muted); font-size: 12px; }
+  main {
+    display: grid;
+    /* ~16 hex bytes + .byte prefix ≈ 100+ chars; keep on one line */
+    grid-template-columns: 1fr minmax(560px, 42vw);
+    gap: 0;
+    min-height: calc(100vh - 52px);
+    transition: grid-template-columns 0.15s ease;
+  }
+  main.sidebar-collapsed {
+    grid-template-columns: 1fr;
+  }
+  @media (max-width: 1100px) {
+    main:not(.sidebar-collapsed) { grid-template-columns: 1fr minmax(480px, 45vw); }
+  }
+  @media (max-width: 900px) {
+    main:not(.sidebar-collapsed) { grid-template-columns: 1fr; }
+  }
+  .workspace {
+    padding: 16px 20px;
+    overflow: auto;
+  }
+  .sidebar {
+    border-left: 1px solid var(--border);
+    background: var(--panel);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow: auto;
+  }
+  main.sidebar-collapsed .sidebar {
+    display: none;
+  }
+  #btnSidebar {
+    margin-left: auto;
+  }
+  main.sidebar-collapsed #btnSidebar {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  label { color: var(--muted); font-size: 12px; }
+  input[type="number"], input[type="text"], select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: 4px;
+    font: inherit;
+  }
+  input[type="number"] { width: 56px; }
+  input[type="color"] {
+    width: 36px;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  button, .btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 4px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #1a1b26;
+    font-weight: 600;
+  }
+  button.primary:hover { filter: brightness(1.08); color: #1a1b26; }
+  .palette {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .swatch {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    border: 3px solid transparent;
+    cursor: pointer;
+    position: relative;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
+  }
+  .swatch.active { border-color: var(--accent); }
+  .swatch span {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: 10px;
+    color: #fff;
+    text-shadow: 0 0 2px #000, 0 0 2px #000;
+  }
+  #sheetWrap {
+    display: inline-block;
+    background: #0d0e14;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    line-height: 0;
+    user-select: none;
+    touch-action: none;
+  }
+  #sheet {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    cursor: crosshair;
+    background:
+      linear-gradient(45deg, #111 25%, transparent 25%),
+      linear-gradient(-45deg, #111 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #111 75%),
+      linear-gradient(-45deg, transparent 75%, #111 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  }
+  .panel-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 6px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 220px;
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 10px;
+    font: 11px/1.35 "SF Mono", "Consolas", "Menlo", monospace;
+    resize: vertical;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .status {
+    font-size: 12px;
+    color: var(--muted);
+    min-height: 1.2em;
+  }
+  .status.ok { color: var(--accent2); }
+  .status.err { color: var(--danger); }
+  .tile-info {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>NES Tile Editor</h1>
+  <span class="hint">2bpp CHR · 16 bytes/tile · plane0 then plane1 · import/export ca65 <code>.byte</code></span>
+  <button type="button" id="btnSidebar" title="Toggle bytes sidebar (])">Hide bytes</button>
+</header>
+<main id="main">
+  <section class="workspace">
+    <div class="row" style="margin-bottom:12px">
+      <label>Cols <input type="number" id="cols" min="1" max="32" value="8" /></label>
+      <label>Rows <input type="number" id="rows" min="1" max="32" value="4" /></label>
+      <label>Zoom <input type="number" id="zoom" min="4" max="48" value="16" /></label>
+      <button id="btnResize" title="Resize sheet (keeps overlapping tiles)">Resize</button>
+      <button id="btnClear">Clear all</button>
+      <span class="tile-info" id="hoverInfo">tile — · cell —</span>
+    </div>
+    <div id="sheetWrap">
+      <canvas id="sheet" width="128" height="64"></canvas>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <span class="panel-title" style="margin:0">Paint color</span>
+      <div class="palette" id="palette"></div>
+    </div>
+    <div class="row">
+      <label>P0 <input type="color" id="c0" value="#0f0f0f" /></label>
+      <label>P1 <input type="color" id="c1" value="#f0d050" /></label>
+      <label>P2 <input type="color" id="c2" value="#e02020" /></label>
+      <label>P3 <input type="color" id="c3" value="#703010" /></label>
+      <button id="btnDefaultPal">Default</button>
+    </div>
+  </section>
+
+  <aside class="sidebar">
+    <div>
+      <p class="panel-title">Label (export prefix)</p>
+      <input type="text" id="label" value="delivery_truck_tiles" style="width:100%" />
+    </div>
+    <div class="row">
+      <button class="primary" id="btnImport">Import ←</button>
+      <button class="primary" id="btnExport">Export →</button>
+      <button id="btnCopy">Copy</button>
+    </div>
+    <p class="status" id="status"></p>
+    <div class="divider"></div>
+    <p class="panel-title">ca65 bytes (paste / edit result)</p>
+    <textarea id="bytes" spellcheck="false" placeholder=".byte $00,$00,..."></textarea>
+    <p class="hint" style="margin:0;color:var(--muted);font-size:11px">
+      Each tile = 16 bytes: 8× plane0 rows, then 8× plane1. Color = p0 + 2×p1.
+      Click/drag on the grid to paint. Right-click = color 0.
+    </p>
+  </aside>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  const canvas = document.getElementById("sheet");
+  const ctx = canvas.getContext("2d");
+  const bytesEl = document.getElementById("bytes");
+  const statusEl = document.getElementById("status");
+  const hoverInfo = document.getElementById("hoverInfo");
+  const labelEl = document.getElementById("label");
+
+  let cols = 8;
+  let rows = 4;
+  let zoom = 16;
+  let paintColor = 1;
+  /** @type {Uint8Array} length = cols*rows*16 */
+  let chr = new Uint8Array(cols * rows * 16);
+  let palette = ["#0f0f0f", "#f0d050", "#e02020", "#703010"];
+  let painting = false;
+  let lastPaintKey = "";
+
+  function tileCount() { return cols * rows; }
+
+  function setStatus(msg, kind) {
+    statusEl.textContent = msg || "";
+    statusEl.className = "status" + (kind ? " " + kind : "");
+  }
+
+  function resizeChr(newCols, newRows) {
+    const next = new Uint8Array(newCols * newRows * 16);
+    const copyCols = Math.min(cols, newCols);
+    const copyRows = Math.min(rows, newRows);
+    for (let ty = 0; ty < copyRows; ty++) {
+      for (let tx = 0; tx < copyCols; tx++) {
+        const si = (ty * cols + tx) * 16;
+        const di = (ty * newCols + tx) * 16;
+        next.set(chr.subarray(si, si + 16), di);
+      }
+    }
+    cols = newCols;
+    rows = newRows;
+    chr = next;
+  }
+
+  function getPixel(tileIndex, x, y) {
+    const base = tileIndex * 16;
+    const p0 = (chr[base + y] >> (7 - x)) & 1;
+    const p1 = (chr[base + 8 + y] >> (7 - x)) & 1;
+    return p0 | (p1 << 1);
+  }
+
+  function setPixel(tileIndex, x, y, color) {
+    const base = tileIndex * 16;
+    const bit = 7 - x;
+    const mask = ~(1 << bit) & 0xff;
+    const p0 = color & 1;
+    const p1 = (color >> 1) & 1;
+    chr[base + y] = (chr[base + y] & mask) | (p0 << bit);
+    chr[base + 8 + y] = (chr[base + 8 + y] & mask) | (p1 << bit);
+  }
+
+  function hexByte(n) {
+    return "$" + n.toString(16).toUpperCase().padStart(2, "0");
+  }
+
+  function exportBytes() {
+    const label = (labelEl.value || "tiles").trim().replace(/\s+/g, "_");
+    const lines = [label + ":"];
+    const n = tileCount();
+    for (let i = 0; i < n; i++) {
+      const parts = [];
+      for (let b = 0; b < 16; b++) parts.push(hexByte(chr[i * 16 + b]));
+      lines.push("\t.byte " + parts.join(",") + "  ; " + i);
+      if ((i + 1) % cols === 0 && i + 1 < n) lines.push("");
+    }
+    return lines.join("\n") + "\n";
+  }
+
+  function parseImport(text) {
+    // Pull all hex bytes: $NN or 0xNN or bare hex pairs after .byte
+    const cleaned = text.replace(/;.*$/gm, "");
+    // Capture label if present
+    const labelMatch = cleaned.match(/^\s*([A-Za-z_][\w]*)\s*:/m);
+    if (labelMatch) labelEl.value = labelMatch[1];
+
+    const bytes = [];
+    const re = /\$([0-9A-Fa-f]{1,2})\b|0x([0-9A-Fa-f]{1,2})\b/g;
+    let m;
+    while ((m = re.exec(cleaned)) !== null) {
+      bytes.push(parseInt(m[1] || m[2], 16) & 0xff);
+    }
+    if (bytes.length === 0) throw new Error("No hex bytes found ($NN)");
+    if (bytes.length % 16 !== 0) {
+      throw new Error(
+        "Byte count " + bytes.length + " is not a multiple of 16 (got " +
+        (bytes.length % 16) + " leftover)"
+      );
+    }
+    const nTiles = bytes.length / 16;
+    // Fit into grid: keep cols if divides evenly, else pick cols
+    let newCols = cols;
+    let newRows = Math.ceil(nTiles / newCols);
+    if (newCols * newRows !== nTiles) {
+      // try common widths
+      const candidates = [8, 4, 6, 2, 1, 16, nTiles];
+      let found = false;
+      for (const c of candidates) {
+        if (nTiles % c === 0) {
+          newCols = c;
+          newRows = nTiles / c;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        newCols = nTiles;
+        newRows = 1;
+      }
+    }
+    cols = newCols;
+    rows = newRows;
+    document.getElementById("cols").value = cols;
+    document.getElementById("rows").value = rows;
+    chr = new Uint8Array(bytes);
+    return nTiles;
+  }
+
+  function draw() {
+    const w = cols * 8;
+    const h = rows * 8;
+    canvas.width = w * zoom;
+    canvas.height = h * zoom;
+    ctx.imageSmoothingEnabled = false;
+
+    // checker for color 0
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        const tx = (px / 8) | 0;
+        const ty = (py / 8) | 0;
+        const lx = px & 7;
+        const ly = py & 7;
+        const ti = ty * cols + tx;
+        const c = getPixel(ti, lx, ly);
+        let fill = palette[c];
+        if (c === 0) {
+          // subtle checker so color 0 is visible on black
+          const chk = ((px >> 1) + (py >> 1)) & 1;
+          fill = chk ? "#1a1a1a" : "#0a0a0a";
+        }
+        ctx.fillStyle = fill;
+        ctx.fillRect(px * zoom, py * zoom, zoom, zoom);
+      }
+    }
+
+    // tile grid
+    ctx.strokeStyle = "rgba(122,162,247,0.35)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= cols; x++) {
+      ctx.beginPath();
+      ctx.moveTo(x * 8 * zoom + 0.5, 0);
+      ctx.lineTo(x * 8 * zoom + 0.5, h * zoom);
+      ctx.stroke();
+    }
+    for (let y = 0; y <= rows; y++) {
+      ctx.beginPath();
+      ctx.moveTo(0, y * 8 * zoom + 0.5);
+      ctx.lineTo(w * zoom, y * 8 * zoom + 0.5);
+      ctx.stroke();
+    }
+
+    // pixel grid (light)
+    if (zoom >= 10) {
+      ctx.strokeStyle = "rgba(255,255,255,0.06)";
+      for (let x = 0; x <= w; x++) {
+        ctx.beginPath();
+        ctx.moveTo(x * zoom + 0.5, 0);
+        ctx.lineTo(x * zoom + 0.5, h * zoom);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= h; y++) {
+        ctx.beginPath();
+        ctx.moveTo(0, y * zoom + 0.5);
+        ctx.lineTo(w * zoom, y * zoom + 0.5);
+        ctx.stroke();
+      }
+    }
+  }
+
+  function syncExport() {
+    bytesEl.value = exportBytes();
+  }
+
+  function canvasPos(e) {
+    const r = canvas.getBoundingClientRect();
+    const x = Math.floor(((e.clientX - r.left) / r.width) * (cols * 8));
+    const y = Math.floor(((e.clientY - r.top) / r.height) * (rows * 8));
+    return { x, y };
+  }
+
+  function paintAt(e, color) {
+    const { x, y } = canvasPos(e);
+    if (x < 0 || y < 0 || x >= cols * 8 || y >= rows * 8) return;
+    const tx = (x / 8) | 0;
+    const ty = (y / 8) | 0;
+    const lx = x & 7;
+    const ly = y & 7;
+    const ti = ty * cols + tx;
+    const key = ti + ":" + lx + ":" + ly + ":" + color;
+    if (key === lastPaintKey) return;
+    lastPaintKey = key;
+    setPixel(ti, lx, ly, color);
+    draw();
+    syncExport();
+    hoverInfo.textContent = "tile " + ti + " · (" + lx + "," + ly + ") = " + color;
+  }
+
+  function buildPaletteUI() {
+    const root = document.getElementById("palette");
+    root.innerHTML = "";
+    for (let i = 0; i < 4; i++) {
+      const d = document.createElement("div");
+      d.className = "swatch" + (i === paintColor ? " active" : "");
+      d.style.background = i === 0
+        ? "repeating-conic-gradient(#333 0% 25%, #111 0% 50%) 50% / 12px 12px"
+        : palette[i];
+      if (i === 0) d.style.backgroundColor = palette[0];
+      d.innerHTML = "<span>" + i + "</span>";
+      d.title = "Color " + i + (i === 0 ? " (transparent/backdrop)" : "");
+      d.addEventListener("click", () => {
+        paintColor = i;
+        buildPaletteUI();
+      });
+      root.appendChild(d);
+    }
+    ["c0", "c1", "c2", "c3"].forEach((id, i) => {
+      document.getElementById(id).value = palette[i];
+    });
+  }
+
+  // Events
+  canvas.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    painting = true;
+    lastPaintKey = "";
+    const color = e.button === 2 ? 0 : paintColor;
+    paintAt(e, color);
+  });
+  window.addEventListener("mouseup", () => {
+    painting = false;
+    lastPaintKey = "";
+  });
+  canvas.addEventListener("mousemove", (e) => {
+    const { x, y } = canvasPos(e);
+    if (x >= 0 && y >= 0 && x < cols * 8 && y < rows * 8) {
+      const ti = ((y / 8) | 0) * cols + ((x / 8) | 0);
+      const c = getPixel(ti, x & 7, y & 7);
+      hoverInfo.textContent =
+        "tile " + ti + " · (" + (x & 7) + "," + (y & 7) + ") = " + c;
+    }
+    if (painting) {
+      const color = e.buttons === 2 ? 0 : paintColor;
+      paintAt(e, color);
+    }
+  });
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  document.getElementById("btnResize").addEventListener("click", () => {
+    const nc = Math.max(1, Math.min(32, +document.getElementById("cols").value || 1));
+    const nr = Math.max(1, Math.min(32, +document.getElementById("rows").value || 1));
+    zoom = Math.max(4, Math.min(48, +document.getElementById("zoom").value || 16));
+    resizeChr(nc, nr);
+    document.getElementById("cols").value = cols;
+    document.getElementById("rows").value = rows;
+    draw();
+    syncExport();
+    setStatus("Resized to " + cols + "×" + rows + " (" + tileCount() + " tiles)", "ok");
+  });
+
+  document.getElementById("zoom").addEventListener("change", () => {
+    zoom = Math.max(4, Math.min(48, +document.getElementById("zoom").value || 16));
+    draw();
+  });
+
+  document.getElementById("btnClear").addEventListener("click", () => {
+    if (!confirm("Clear all tiles?")) return;
+    chr.fill(0);
+    draw();
+    syncExport();
+    setStatus("Cleared", "ok");
+  });
+
+  document.getElementById("btnImport").addEventListener("click", () => {
+    try {
+      const n = parseImport(bytesEl.value);
+      zoom = Math.max(4, Math.min(48, +document.getElementById("zoom").value || 16));
+      draw();
+      syncExport();
+      setStatus("Imported " + n + " tiles → " + cols + "×" + rows, "ok");
+    } catch (err) {
+      setStatus(String(err.message || err), "err");
+    }
+  });
+
+  document.getElementById("btnExport").addEventListener("click", () => {
+    syncExport();
+    setStatus("Exported " + tileCount() + " tiles", "ok");
+  });
+
+  document.getElementById("btnCopy").addEventListener("click", async () => {
+    syncExport();
+    try {
+      await navigator.clipboard.writeText(bytesEl.value);
+      setStatus("Copied to clipboard", "ok");
+    } catch {
+      bytesEl.select();
+      document.execCommand("copy");
+      setStatus("Copied (fallback)", "ok");
+    }
+  });
+
+  ["c0", "c1", "c2", "c3"].forEach((id, i) => {
+    document.getElementById(id).addEventListener("input", (e) => {
+      palette[i] = e.target.value;
+      buildPaletteUI();
+      draw();
+    });
+  });
+
+  document.getElementById("btnDefaultPal").addEventListener("click", () => {
+    palette = ["#0f0f0f", "#f0d050", "#e02020", "#703010"];
+    buildPaletteUI();
+    draw();
+  });
+
+  // Sidebar collapse (more room for painting)
+  const mainEl = document.getElementById("main");
+  const btnSidebar = document.getElementById("btnSidebar");
+  function setSidebarCollapsed(collapsed) {
+    mainEl.classList.toggle("sidebar-collapsed", collapsed);
+    btnSidebar.textContent = collapsed ? "Show bytes" : "Hide bytes";
+    btnSidebar.title = collapsed
+      ? "Show bytes sidebar (])"
+      : "Hide bytes sidebar (])";
+    try {
+      localStorage.setItem("nes-tile-editor-sidebar", collapsed ? "1" : "0");
+    } catch (_) {}
+  }
+  function toggleSidebar() {
+    setSidebarCollapsed(!mainEl.classList.contains("sidebar-collapsed"));
+  }
+  btnSidebar.addEventListener("click", toggleSidebar);
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "]" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const t = e.target;
+      if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT")) return;
+      e.preventDefault();
+      toggleSidebar();
+    }
+  });
+  try {
+    if (localStorage.getItem("nes-tile-editor-sidebar") === "1") {
+      setSidebarCollapsed(true);
+    }
+  } catch (_) {}
+
+  // Seed with empty truck-sized sheet + sample comment
+  bytesEl.value =
+    "; Paste ca65 .byte lines here, then Import\n" +
+    "; Or paint on the grid and Export / Copy\n";
+  buildPaletteUI();
+  draw();
+  syncExport();
+  setStatus("Ready — import bytes or paint tiles", "ok");
+})();
+</script>
+</body>
+</html>
