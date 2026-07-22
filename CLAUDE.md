@@ -30,7 +30,7 @@ make clean && make
 Controller bit masks after `read_controller` (ROL serial):  
 `A=$80 B=$40 Select=$20 Start=$10 Up=$08 Down=$04 Left=$02 Right=$01`
 
-**Objective**: Pick up package near warehouse start, carry to truck at right end of level.
+**Objective**: Pick up package in the expanded warehouse, exit the door (~world X 400–416), deliver to the truck parked just outside (416–480).
 
 ## Layout
 
@@ -54,7 +54,8 @@ Controller bit masks after `read_controller` (ROL serial):
 - **Scroll**: `scroll_lo/hi`; NMI writes `PPUCTRL` + `PPUSCROLL`
 - **Physics**: gravity, jump (`JUMP_V`), ground at `GROUND_TOP_Y` (168), two platforms
 - **Package**: `has_package`; world sprite until pickup, then carried sprite
-- **Truck zone**: player AABB overlaps truck world X 432–480 with package → win
+- **Warehouse**: interior to exit door world X 400–416; ceiling + walls; truck just outside 416–480
+- **Truck zone**: carrying + on ground + overlap truck X → win
 - **Player**: original 16×16 metasprites (idle/walk, optional flip)
 
 ### Zero page highlights

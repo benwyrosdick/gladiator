@@ -61,39 +61,45 @@ GROUND_TOP_Y = 176          ; pixel Y of ground surface (row 22)
 ; nametable rows: ground top at row 22 (22*8=176)
 ; Truck wheels on row 21 (attr top) + ground on row 22 (attr bottom) → no pal bleed
 
-; Warehouse geometry (NT0 / world X 0-127)
+; Expanded warehouse: interior world X [WH_LEFT, WH_EXIT_L), door, truck outside
 WH_LEFT       = 16          ; left wall solid x < 16 (cols 0-1)
-WH_RIGHT_L    = 96          ; right wall cols 12-13 → x 96-112
-WH_RIGHT_R    = 112
+; Exit doorway world X 400-416 ($0190-$01A0); open for y >= WH_DOOR_TOP
+WH_EXIT_L_L   = $90         ; 400 = 256+144
+WH_EXIT_L_H   = $01
+WH_EXIT_R_L   = $A0         ; 416 = 256+160 — truck starts here
+WH_EXIT_R_H   = $01
 WH_DOOR_TOP   = 144         ; open doorway for y >= 144 (tile rows 18+)
 WH_CEILING    = 40          ; bottom of ceiling (row 5 → y 40)
 
-; Climbable shelves (platform tops), ~24px steps (within jump height)
-; X ranges leave gaps from walls so you can drop off a side
-SHELF_LOW_Y   = 152         ; row 19, x 24-64 (cols 3-7)
-SHELF_MID_Y   = 128         ; row 16, x 48-88 (cols 6-10)
-SHELF_HIGH_Y  = 104         ; row 13, x 32-72 (cols 4-8) — package here
+; Climbable shelves inside warehouse (~24px steps)
+SHELF_LOW_Y   = 152         ; row 19
+SHELF_MID_Y   = 128         ; row 16
+SHELF_HIGH_Y  = 104         ; row 13 — package spawn
 SHELF_LOW_L   = 24
-SHELF_LOW_R   = 64
+SHELF_LOW_R   = 80
 SHELF_MID_L   = 48
-SHELF_MID_R   = 88
-SHELF_HIGH_L  = 32
-SHELF_HIGH_R  = 72
+SHELF_MID_R   = 112
+SHELF_HIGH_L  = 40
+SHELF_HIGH_R  = 96
 
-; Outdoor platforms
-PLAT1_Y       = 144         ; row 18, world x 160-224
-PLAT2_Y       = 152         ; row 19, world x 320-384
+; Interior bridges deeper in warehouse (still before exit at 400)
+PLAT1_Y       = 144         ; world x 160-224
+PLAT1_L       = 160
+PLAT1_R       = 224
+PLAT2_Y       = 152         ; world x 320-384 (hi=1)
+PLAT2_L_LO    = 64          ; 320-256
+PLAT2_R_LO    = 128         ; 384-256
 
 PKG_W         = 12
 PKG_H         = 12
-PKG_WORLD_X_L = 44          ; on high shelf center
+PKG_WORLD_X_L = 56          ; on high shelf
 PKG_WORLD_X_H = 0
-PKG_WORLD_Y   = SHELF_HIGH_Y - PKG_H   ; 84
+PKG_WORLD_Y   = SHELF_HIGH_Y - PKG_H
 PKG_THROW     = $04          ; extra horizontal toss on drop (0.25 px/f)
-PKG_TOSS_UP   = $D0          ; -48 (1/16 px) ≈ -3 px/f upward when holding Up on release
+PKG_TOSS_UP   = $D0          ; -48 (1/16 px) upward when holding Up on release
 
-; Truck BG tiles: NT1 cols 22-27 → world X 432-480 (hi=$01)
-TRUCK_LEFT_L  = $B0         ; 256+176=432
+; Truck just outside door: NT1 cols 20-27 → world X 416-480 (door ends 416)
+TRUCK_LEFT_L  = $A0         ; 256+160=416
 TRUCK_LEFT_H  = $01
 TRUCK_RIGHT_L = $E0         ; 256+224=480
 TRUCK_RIGHT_H = $01
@@ -811,7 +817,7 @@ feet_on_any_platform:
 	jsr plat1_x_overlap
 	bcs @yes
 @out2:
-	; outdoor plat 2 may share Y with SHELF_LOW — always test
+	; plat 2 may share Y with SHELF_LOW — always test
 	lda check_y
 	cmp #PLAT2_Y
 	bne @no
@@ -876,16 +882,16 @@ x_overlap_shelf_low:
 	clc
 	rts
 
-; outdoor platform 1 [160,224) y=PLAT1_Y
+; Interior bridge 1 [PLAT1_L, PLAT1_R) y=PLAT1_Y
 plat1_x_overlap:
 	lda check_x_hi
 	bne @no
 	lda check_x_lo
-	cmp #224
+	cmp #PLAT1_R
 	bcs @no
 	clc
 	adc temp3
-	cmp #161
+	cmp #PLAT1_L + 1
 	bcc @no
 	sec
 	rts
@@ -893,17 +899,17 @@ plat1_x_overlap:
 	clc
 	rts
 
-; outdoor platform 2 [320,384) y=PLAT2_Y
+; Interior bridge 2 world [320,384) hi=1 lo [PLAT2_L_LO, PLAT2_R_LO)
 plat2_x_overlap:
 	lda check_x_hi
 	cmp #1
 	bne @no
 	lda check_x_lo
-	cmp #128
+	cmp #PLAT2_R_LO
 	bcs @no
 	clc
 	adc temp3
-	cmp #65
+	cmp #PLAT2_L_LO + 1
 	bcc @no
 	sec
 	rts
@@ -911,62 +917,57 @@ plat2_x_overlap:
 	clc
 	rts
 
-; Warehouse walls + ceiling. Call after horizontal move.
+; Warehouse walls + ceiling. Exit doorway at world [400,416) open for y >= WH_DOOR_TOP.
 collide_walls:
-	; --- left wall: x < WH_LEFT ---
+	; --- left wall: x < WH_LEFT (hi=0 only) ---
 	lda player_x_hi
-	bne @right
+	bne @exit
 	lda player_x_lo
 	cmp #WH_LEFT
-	bcs @right
+	bcs @exit
 	lda #WH_LEFT
 	sta player_x_lo
 	lda #0
 	sta player_x_sub
 	lda vel_x
-	bpl @right
+	bpl @exit
 	lda #0
 	sta vel_x
 
-@right:
-	; --- right wall solid when body overlaps [WH_RIGHT_L, WH_RIGHT_R) x [0, WH_DOOR_TOP) ---
+@exit:
+	; --- exit pillar solid above door: body vs [400,416) and player_y < WH_DOOR_TOP ---
 	lda player_x_hi
+	cmp #WH_EXIT_L_H
 	bne @ceil
-	; player right > wall left && player left < wall right
 	lda player_x_lo
-	cmp #WH_RIGHT_R
+	cmp #WH_EXIT_R_L
 	bcs @ceil
 	clc
 	adc #PLAYER_W
-	cmp #WH_RIGHT_L + 1
+	cmp #WH_EXIT_L_L + 1
 	bcc @ceil
-	; Y: any part of player above door top (player_y < WH_DOOR_TOP)
 	lda player_y
 	cmp #WH_DOOR_TOP
-	bcs @ceil                 ; fully in doorway height
-	; push out based on old position
-	lda old_x_lo
-	cmp #WH_RIGHT_L
-	bcc @push_l
-	; from right or inside → push to right of wall
-	lda #WH_RIGHT_R
+	bcs @ceil                 ; in doorway opening
+	; push left of exit (stay inside warehouse)
+	lda #WH_EXIT_L_L - PLAYER_W
 	sta player_x_lo
-	jmp @stop_x
-@push_l:
-	lda #WH_RIGHT_L - PLAYER_W
-	sta player_x_lo
-@stop_x:
+	lda #WH_EXIT_L_H
+	sta player_x_hi
 	lda #0
 	sta player_x_sub
 	sta vel_x
 
 @ceil:
-	; ceiling inside warehouse (x < WH_RIGHT_R): keep head below WH_CEILING
+	; ceiling while inside warehouse (world x < WH_EXIT_L)
 	lda player_x_hi
+	cmp #WH_EXIT_L_H
+	bcc @ceil_do
 	bne @done
 	lda player_x_lo
-	cmp #WH_RIGHT_R
+	cmp #WH_EXIT_L_L
 	bcs @done
+@ceil_do:
 	lda player_y
 	cmp #WH_CEILING
 	bcs @done
@@ -1737,54 +1738,51 @@ package_landed:
 package_collide_walls:
 	; left wall
 	lda package_x_hi
-	bne @right
+	bne @exit
 	lda package_x_lo
 	cmp #WH_LEFT
-	bcs @right
+	bcs @exit
 	lda #WH_LEFT
 	sta package_x_lo
 	lda #0
 	sta package_x_sub
 	lda package_vel_x
-	bpl @right
+	bpl @exit
 	lda #0
 	sta package_vel_x
-@right:
-	; right wall solid above door
+@exit:
+	; exit pillar solid above door
 	lda package_x_hi
+	cmp #WH_EXIT_L_H
 	bne @ceil
 	lda package_x_lo
-	cmp #WH_RIGHT_R
+	cmp #WH_EXIT_R_L
 	bcs @ceil
 	clc
 	adc #PKG_W
-	cmp #WH_RIGHT_L + 1
+	cmp #WH_EXIT_L_L + 1
 	bcc @ceil
 	lda package_y
 	cmp #WH_DOOR_TOP
 	bcs @ceil
-	; push out: if package center-ish left of wall, push left
-	lda package_x_lo
-	cmp #WH_RIGHT_L
-	bcc @push_l
-	lda #WH_RIGHT_R
-	sta package_x_lo
-	jmp @stop_x
-@push_l:
-	lda #WH_RIGHT_L
+	lda #WH_EXIT_L_L
 	sec
 	sbc #PKG_W
 	sta package_x_lo
-@stop_x:
+	lda #WH_EXIT_L_H
+	sta package_x_hi
 	lda #0
 	sta package_x_sub
 	sta package_vel_x
 @ceil:
 	lda package_x_hi
+	cmp #WH_EXIT_L_H
+	bcc @ceil_do
 	bne @done
 	lda package_x_lo
-	cmp #WH_RIGHT_R
+	cmp #WH_EXIT_L_L
 	bcs @done
+@ceil_do:
 	lda package_y
 	cmp #WH_CEILING
 	bcs @done
@@ -1948,8 +1946,7 @@ package_integrate_y:
 	rts
 
 check_truck:
-	; Win only when carrying package, on the ground, and overlapping truck X
-	; (jumping over the truck does not count)
+	; Win: carrying, on ground, overlapping truck just outside warehouse exit
 	lda has_package
 	beq @done
 	lda on_ground
@@ -1958,9 +1955,9 @@ check_truck:
 	cmp #TRUCK_LEFT_H
 	bne @done
 	lda player_x_lo
-	cmp #TRUCK_LEFT_L - PLAYER_W   ; 416: player right edge at truck left
+	cmp #TRUCK_LEFT_L - PLAYER_W   ; reach truck left (416)
 	bcc @done
-	cmp #TRUCK_RIGHT_L               ; 480: past truck right edge
+	cmp #TRUCK_RIGHT_L               ; past truck right (480)
 	bcs @done
 	jsr enter_win
 @done:
@@ -2303,27 +2300,37 @@ pp_row_nt0:
 	rts
 
 draw_warehouse:
-	; Tall warehouse cols 0-13, ceiling row 5, walls rows 6-21
-	; Right wall cols 12-13 with doorway rows 18-21 open
+	; Expanded warehouse: ceiling across NT0 + NT1 cols 0-17 (to exit at world 400),
+	; left wall, exit pillar NT1 cols 18-19, interior shelves. Truck drawn outside door.
 	bit PPUSTATUS
 
-	; Ceiling row 5, cols 0-13: $2000+5*32 = $20A0
+	; Ceiling row 5 full NT0
 	lda #$20
 	sta PPUADDR
 	lda #$A0
 	sta PPUADDR
-	ldx #14
+	ldx #32
 	lda #T_BRICK
-@ceil:
+@c0:
 	sta PPUDATA
 	dex
-	bne @ceil
+	bne @c0
+	; Ceiling row 5 NT1 cols 0-17 (world 256-400)
+	lda #$24
+	sta PPUADDR
+	lda #$A0
+	sta PPUADDR
+	ldx #18
+	lda #T_BRICK
+@c1:
+	sta PPUDATA
+	dex
+	bne @c1
 
 	; ACME signboard on roof (rows 2-4, cols 4-9)
-	; top border
 	lda #$20
 	sta PPUADDR
-	lda #$44                ; row 2 col 4
+	lda #$44
 	sta PPUADDR
 	ldx #6
 	lda #T_BRICK
@@ -2331,27 +2338,25 @@ draw_warehouse:
 	sta PPUDATA
 	dex
 	bne @sign_top
-	; middle: | A C M E |
 	lda #$20
 	sta PPUADDR
-	lda #$64                ; row 3 col 4
+	lda #$64
 	sta PPUADDR
 	lda #T_BRICK
 	sta PPUDATA
-	lda #T_FONT + 1         ; A
+	lda #T_FONT + 1
 	sta PPUDATA
-	lda #T_FONT + 3         ; C
+	lda #T_FONT + 3
 	sta PPUDATA
-	lda #T_FONT + 13        ; M
+	lda #T_FONT + 13
 	sta PPUDATA
-	lda #T_FONT + 5         ; E
+	lda #T_FONT + 5
 	sta PPUDATA
 	lda #T_BRICK
 	sta PPUDATA
-	; bottom border (rests on ceiling)
 	lda #$20
 	sta PPUADDR
-	lda #$84                ; row 4 col 4
+	lda #$84
 	sta PPUADDR
 	ldx #6
 	lda #T_BRICK
@@ -2371,31 +2376,25 @@ draw_warehouse:
 	cpx #22
 	bcc @left
 
-	; Right wall cols 12-13, rows 6-17 only (door below)
+	; Exit pillar NT1 cols 18-19 (world 400-416), rows 6-17; door open rows 18-21
 	ldx #6
-@right:
+@exit_w:
 	txa
-	pha
-	jsr pp_row_nt0
-	; advance to col 12: write 12 skies then 2 bricks — or set addr
-	pla
 	sta temp
 	lda #0
 	sta temp_hi
 	ldy #5
-@rs:
+@es:
 	asl temp
 	rol temp_hi
 	dey
-	bne @rs
+	bne @es
 	lda temp
 	clc
-	adc #12
+	adc #18
 	sta temp
 	lda temp_hi
-	adc #0
-	clc
-	adc #$20
+	adc #$24
 	sta PPUADDR
 	lda temp
 	sta PPUADDR
@@ -2404,41 +2403,39 @@ draw_warehouse:
 	sta PPUDATA
 	inx
 	cpx #18
-	bcc @right
+	bcc @exit_w
 
-	; Door lintel row 17; opening rows 18-21 empty (sky) down to ground.
-
-	; Shelves with side gaps so you can drop off (match collision X ranges)
-	; High shelf row 13 (y=104), cols 4-8 (x 32-72)
+	; Shelves (match collision X ranges)
+	; High shelf row 13 (y=104), cols 5-11 (x 40-96)
 	lda #$21
 	sta PPUADDR
-	lda #$A4                ; 13*32+4 = $1A4 → $21A4
+	lda #$A5                ; 13*32+5
 	sta PPUADDR
-	ldx #5
+	ldx #7
 	lda #T_PLATFORM
 @sh:
 	sta PPUDATA
 	dex
 	bne @sh
 
-	; Mid shelf row 16 (y=128), cols 6-10 (x 48-88)
+	; Mid shelf row 16 (y=128), cols 6-13 (x 48-112)
 	lda #$22
 	sta PPUADDR
-	lda #$06                ; 16*32+6 = $206 → $2206
+	lda #$06                ; 16*32+6
 	sta PPUADDR
-	ldx #5
+	ldx #8
 	lda #T_PLATFORM
 @sm:
 	sta PPUDATA
 	dex
 	bne @sm
 
-	; Low shelf row 19 (y=152), cols 3-7 (x 24-64)
+	; Low shelf row 19 (y=152), cols 3-9 (x 24-80)
 	lda #$22
 	sta PPUADDR
-	lda #$63                ; 19*32+3 = $263 → $2263
+	lda #$63                ; 19*32+3
 	sta PPUADDR
-	ldx #5
+	ldx #7
 	lda #T_PLATFORM
 @sl:
 	sta PPUDATA
@@ -2447,13 +2444,13 @@ draw_warehouse:
 	rts
 
 draw_platform_tiles:
-	; Outdoor platforms only (warehouse shelves drawn in draw_warehouse)
+	; Interior bridges deeper in warehouse (before exit)
 	bit PPUSTATUS
 
-	; Platform 1: world px 160-224 (cols 20-27), top at y=144 → tile row 18
+	; PLAT1: world 160-224, cols 20-27 NT0, row 18 (y=144)
 	lda #$22
 	sta PPUADDR
-	lda #$54                ; 18*32+20 = $254
+	lda #$54                ; 18*32+20
 	sta PPUADDR
 	ldx #8
 	lda #T_PLATFORM
@@ -2462,11 +2459,10 @@ draw_platform_tiles:
 	dex
 	bne @p1
 
-	; Platform 2: world px 320-384 (NT1 cols 8-15), top at y=152 → tile row 19
-	bit PPUSTATUS
+	; PLAT2: world 320-384, NT1 cols 8-15, row 19 (y=152)
 	lda #$26
 	sta PPUADDR
-	lda #$68                ; 19*32+8 = $268
+	lda #$68                ; 19*32+8
 	sta PPUADDR
 	ldx #8
 	lda #T_PLATFORM
@@ -2477,8 +2473,9 @@ draw_platform_tiles:
 	rts
 
 draw_truck:
-	; 8x4 truck, rows 18-21 (bottom y=175 ≈ ground y=176). NT1 cols 20-27.
-	; Wheels = attr row5 top (pal3); ground = attr row5 bottom (pal0) — no bleed.
+	; 8x4 truck just outside exit door. NT1 cols 20-27 → world 416-480.
+	; Door ends at col 19 (x 416); truck begins col 20.
+	; Wheels = attr row5 top (pal3); ground = attr row5 bottom (pal0).
 	; $2400 + 18*32 + 20 = $2654
 	bit PPUSTATUS
 	ldx #0
