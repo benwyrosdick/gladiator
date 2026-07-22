@@ -34,33 +34,7 @@ BTN_DOWN   = $04
 BTN_LEFT   = $02
 BTN_RIGHT  = $01
 
-; Tile indices (order in tiles: blob)
-T_SKY         = $00
-T_PLAYER0     = $01
-T_PLAYER1     = $02
-T_PLAYER2     = $03
-T_PLAYER3     = $04
-T_PLAYER4     = $05
-T_PLAYER5     = $06
-T_GROUND_TOP  = $07
-T_GROUND_FILL = $08
-T_BRICK       = $09
-T_PLATFORM    = $0A
-T_BOX         = $0B          ; package TL (12x12 uses $0B-$0E)
-T_BOX_TR      = $0C
-T_BOX_BL      = $0D
-T_BOX_BR      = $0E
-T_BOX0        = $0F          ; title flat box 6x3 (tiles $0F-$20)
-T_TRUCK0      = $21          ; delivery truck 8x4 (tiles $21-$40)
-T_FONT        = $41
-; font: 0=space, 1=A … 26=Z, 27=!
-
-PLAYER_IDLE_0 = T_PLAYER0
-PLAYER_IDLE_1 = T_PLAYER1
-PLAYER_IDLE_2 = T_PLAYER2
-PLAYER_IDLE_3 = T_PLAYER3
-PLAYER_WALK_2 = T_PLAYER4
-PLAYER_WALK_3 = T_PLAYER5
+; Tile indices are derived from CHR labels after tiles_end (see RODATA).
 
 PLAYER_W     = 16
 PLAYER_H     = 16
@@ -187,10 +161,11 @@ oam_shadow: .res 256
 	.segment "RODATA"
 
 tiles:
-; $00 sky (empty)
+; sky (empty)
+sky_tile:
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 
-; $01-$06 player (original gladiator art)
+; player (original gladiator art)
 player_s_0_idle:
 	.byte $07,$08,$10,$20,$20,$17,$0F,$0F,$00,$07,$0F,$1F,$1F,$09,$05,$05
 player_s_1_idle:
@@ -207,22 +182,25 @@ player_s_3_walk:
 ; NES CHR: 8 bytes plane0 (rows 0-7) then 8 bytes plane1.
 ; Same bits in both planes → palette index 3 (bright).
 
-; $07 ground top
+ground_top_tile:
 	.byte $FF,$FF,$AA,$55,$AA,$55,$FF,$FF,$00,$FF,$55,$AA,$55,$AA,$FF,$FF
-; $08 ground fill
+ground_fill_tile:
 	.byte $AA,$55,$AA,$55,$AA,$55,$AA,$55,$55,$AA,$55,$AA,$55,$AA,$55,$AA
-; $09 brick
+brick_tile:
 	.byte $FF,$81,$BD,$BD,$FF,$DB,$DB,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
-; $0A platform — full 8x8 solid ledge (white top, blue body; always visible on black sky)
+; platform — full 8x8 solid ledge (white top, blue body; always visible on black sky)
+platform_tile:
 	.byte $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF
-; $0B-$0E package 12x12 (TL/TR/BL/BR). 0=clear 1=white label 2=cardboard 3=outline
+; package 12x12 (TL/TR/BL/BR). 0=clear 1=white label 2=cardboard 3=outline
 ; Label is 4x6 at (2,2) inside the box
+package_tiles:
 	.byte $FF,$80,$BC,$BC,$BC,$BC,$BC,$BC,$FF,$FF,$C3,$C3,$C3,$C3,$C3,$C3  ; TL
 	.byte $F0,$10,$10,$10,$10,$10,$10,$10,$F0,$F0,$F0,$F0,$F0,$F0,$F0,$F0  ; TR
 	.byte $80,$80,$80,$FF,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$00,$00,$00,$00  ; BL
 	.byte $10,$10,$10,$F0,$00,$00,$00,$00,$F0,$F0,$F0,$F0,$00,$00,$00,$00  ; BR
-; $0F-$20 title flat shipping box (6x3 tiles) — front view
+; title flat shipping box 6x3 — front view
 ; 0=black outline/icons  1=light panel+label  2=cardboard  3=red tape/border
+title_package_tiles:
 	.byte $03,$04,$08,$10,$20,$40,$FF,$80,$00,$03,$07,$0F,$1F,$3F,$00,$7F  ; 0
 	.byte $FF,$00,$00,$00,$00,$00,$FF,$00,$00,$FF,$FF,$FF,$FF,$FF,$00,$FF  ; 1
 	.byte $FF,$01,$03,$07,$0F,$1F,$FF,$3F,$00,$FF,$FF,$FF,$FF,$FF,$3F,$FF  ; 2
@@ -241,7 +219,7 @@ player_s_3_walk:
 	.byte $00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00  ; 15
 	.byte $00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00  ; 16
 	.byte $41,$41,$42,$44,$48,$50,$60,$C0,$BE,$BE,$BC,$B8,$B0,$A0,$80,$00  ; 17
-; $21-$40 delivery truck 8x4 — yellow/red van, facing right
+; delivery truck 8x4 — yellow/red van, facing right
 ; 0=empty (sky)  1=yellow body  2=red cab/lines  3=dark outline+tires (visible on black)
 delivery_truck_tiles:
 	.byte $00,$00,$00,$00,$7F,$80,$80,$8F,$00,$00,$00,$00,$00,$7F,$7F,$7F  ; 0
@@ -277,7 +255,7 @@ delivery_truck_tiles:
 	.byte $00,$00,$07,$0C,$F8,$08,$0C,$07,$FF,$FF,$FF,$FF,$0F,$0F,$0F,$07  ; 30
 	.byte $07,$07,$87,$C1,$7F,$40,$C0,$80,$FA,$FA,$F8,$FE,$C0,$C0,$C0,$80  ; 31
 
-; $41+ font: space, A-Z, !
+; font: space, A-Z, !
 font_space:
 	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
 	.byte $38,$44,$44,$7C,$44,$44,$44,$00,$38,$44,$44,$7C,$44,$44,$44,$00 ; A
@@ -308,6 +286,36 @@ font_space:
 	.byte $7E,$02,$04,$08,$10,$20,$7E,$00,$7E,$02,$04,$08,$10,$20,$7E,$00 ; Z
 	.byte $08,$08,$08,$08,$08,$00,$08,$00,$08,$08,$08,$08,$08,$00,$08,$00 ; !
 tiles_end:
+
+; Tile indices from CHR labels (16 bytes per tile). Insert/reorder tiles freely;
+; these stay correct as long as the labels mark the first tile of each set.
+T_SKY              = (sky_tile - tiles) / 16
+T_PLAYER_S_0_IDLE  = (player_s_0_idle - tiles) / 16
+T_PLAYER_S_1_IDLE  = (player_s_1_idle - tiles) / 16
+T_PLAYER_S_2_IDLE  = (player_s_2_idle - tiles) / 16
+T_PLAYER_S_3_IDLE  = (player_s_3_idle - tiles) / 16
+T_PLAYER_S_2_WALK  = (player_s_2_walk - tiles) / 16
+T_PLAYER_S_3_WALK  = (player_s_3_walk - tiles) / 16
+T_GROUND_TOP       = (ground_top_tile - tiles) / 16
+T_GROUND_FILL      = (ground_fill_tile - tiles) / 16
+T_BRICK            = (brick_tile - tiles) / 16
+T_PLATFORM         = (platform_tile - tiles) / 16
+T_PACKAGE          = (package_tiles - tiles) / 16
+T_PACKAGE_TR       = T_PACKAGE + 1
+T_PACKAGE_BL       = T_PACKAGE + 2
+T_PACKAGE_BR       = T_PACKAGE + 3
+T_TITLE_PACKAGE    = (title_package_tiles - tiles) / 16
+T_DELIVERY_TRUCK   = (delivery_truck_tiles - tiles) / 16
+T_FONT             = (font_space - tiles) / 16
+; font relative: 0=space, 1=A … 26=Z, 27=!
+
+; Metasprite tile aliases (player_s_* labels)
+PLAYER_IDLE_0 = T_PLAYER_S_0_IDLE
+PLAYER_IDLE_1 = T_PLAYER_S_1_IDLE
+PLAYER_IDLE_2 = T_PLAYER_S_2_IDLE
+PLAYER_IDLE_3 = T_PLAYER_S_3_IDLE
+PLAYER_WALK_2 = T_PLAYER_S_2_WALK
+PLAYER_WALK_3 = T_PLAYER_S_3_WALK
 
 ; Metasprites: Y, X, tile, attr … $80
 player_idle_metasprite:
@@ -515,7 +523,7 @@ draw_title_screen:
 @row0:
 	txa
 	clc
-	adc #T_BOX0
+	adc #T_TITLE_PACKAGE
 	sta PPUDATA
 	inx
 	cpx #6
@@ -528,7 +536,7 @@ draw_title_screen:
 @row1:
 	txa
 	clc
-	adc #T_BOX0
+	adc #T_TITLE_PACKAGE
 	sta PPUDATA
 	inx
 	cpx #12
@@ -541,7 +549,7 @@ draw_title_screen:
 @row2:
 	txa
 	clc
-	adc #T_BOX0
+	adc #T_TITLE_PACKAGE
 	sta PPUDATA
 	inx
 	cpx #18
@@ -2056,7 +2064,7 @@ draw_package_sprites:
 	; TL
 	lda temp2
 	sta oam_shadow, x
-	lda #T_BOX
+	lda #T_PACKAGE
 	sta oam_shadow+1, x
 	lda #%00000001          ; palette 1
 	sta oam_shadow+2, x
@@ -2065,7 +2073,7 @@ draw_package_sprites:
 	; TR
 	lda temp2
 	sta oam_shadow+4, x
-	lda #T_BOX_TR
+	lda #T_PACKAGE_TR
 	sta oam_shadow+5, x
 	lda #%00000001
 	sta oam_shadow+6, x
@@ -2078,7 +2086,7 @@ draw_package_sprites:
 	clc
 	adc #8
 	sta oam_shadow+8, x
-	lda #T_BOX_BL
+	lda #T_PACKAGE_BL
 	sta oam_shadow+9, x
 	lda #%00000001
 	sta oam_shadow+10, x
@@ -2089,7 +2097,7 @@ draw_package_sprites:
 	clc
 	adc #8
 	sta oam_shadow+12, x
-	lda #T_BOX_BR
+	lda #T_PACKAGE_BR
 	sta oam_shadow+13, x
 	lda #%00000001
 	sta oam_shadow+14, x
@@ -2482,7 +2490,7 @@ draw_truck:
 @r0:
 	txa
 	clc
-	adc #T_TRUCK0
+	adc #T_DELIVERY_TRUCK
 	sta PPUDATA
 	inx
 	cpx #8
@@ -2495,7 +2503,7 @@ draw_truck:
 @r1:
 	txa
 	clc
-	adc #T_TRUCK0
+	adc #T_DELIVERY_TRUCK
 	sta PPUDATA
 	inx
 	cpx #16
@@ -2508,7 +2516,7 @@ draw_truck:
 @r2:
 	txa
 	clc
-	adc #T_TRUCK0
+	adc #T_DELIVERY_TRUCK
 	sta PPUDATA
 	inx
 	cpx #24
@@ -2521,7 +2529,7 @@ draw_truck:
 @r3:
 	txa
 	clc
-	adc #T_TRUCK0
+	adc #T_DELIVERY_TRUCK
 	sta PPUDATA
 	inx
 	cpx #32

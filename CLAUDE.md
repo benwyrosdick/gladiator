@@ -63,7 +63,7 @@ Controller bit masks after `read_controller` (ROL serial):
 
 ### CHR tiles
 
-Order in `tiles:` … `tiles_end:` must match constants `T_*` (sky, player, ground, brick, platform, box, truck, font).
+Tiles live under labels in `tiles:` … `tiles_end:` (`sky_tile`, `player_s_*`, `ground_top_tile`, `ground_fill_tile`, `brick_tile`, `platform_tile`, `package_tiles`, `title_package_tiles`, `delivery_truck_tiles`, `font_space`). Indices are derived as `(label - tiles) / 16` (`T_SKY`, `T_GROUND_TOP`, `T_PACKAGE`, `T_TITLE_PACKAGE`, `T_DELIVERY_TRUCK`, `T_FONT`, …). Prefer those symbols over hard-coded tile numbers.
 
 Font: `T_FONT + 0` = space, `+1` = A … `+26` = Z, `+27` = `!`. Strings are font-relative indices ending in `$FF`.
 
