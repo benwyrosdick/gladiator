@@ -2194,6 +2194,7 @@ update_timeout:
 	rts
 
 ; Sprite truck at world X = TRUCK_LEFT + truck_drive (8×4 tiles, pal 3)
+; Columns that would wrap past X=255 are skipped (no wrap to left edge).
 draw_departing_truck:
 	; world_lo/hi
 	lda #TRUCK_LEFT_L
@@ -2203,15 +2204,17 @@ draw_departing_truck:
 	lda #TRUCK_LEFT_H
 	adc #0
 	sta temp_hi             ; world hi
-	; screen x = world - scroll
+	; screen x = world - scroll (16-bit)
 	lda temp3
 	sec
 	sbc scroll_lo
-	sta temp                ; base screen X
+	sta temp                ; base screen X lo
 	lda temp_hi
 	sbc scroll_hi
-	bne @done               ; not fully on screen (hi must be 0)
-	; draw 4 rows × 8 tiles
+	sta temp_hi             ; base screen X hi (0 = on/near screen, $FF = off left, ≥1 = off right)
+	bmi @done               ; entirely off left
+	bne @done               ; base past right edge
+	; draw 4 rows × 8 tiles; skip any col whose X would wrap (C=1 on adc)
 	ldx oam_idx
 	lda #0
 	sta temp2               ; tile index within truck (0..31)
@@ -2221,6 +2224,15 @@ draw_departing_truck:
 	lda #0
 	sta temp3               ; col 0..7
 @col:
+	; X = base + col*8 — if carry set, sprite would wrap to left; hide it
+	lda temp3
+	asl a
+	asl a
+	asl a
+	clc
+	adc temp
+	bcs @skip               ; past right edge of screen
+	sta oam_shadow+3, x
 	; Y
 	lda check_y
 	sta oam_shadow, x
@@ -2232,18 +2244,11 @@ draw_departing_truck:
 	; attr pal 3
 	lda #%00000011
 	sta oam_shadow+2, x
-	; X = base + col*8
-	lda temp3
-	asl a
-	asl a
-	asl a
-	clc
-	adc temp
-	sta oam_shadow+3, x
 	txa
 	clc
 	adc #4
 	tax
+@skip:
 	inc temp2
 	inc temp3
 	lda temp3
