@@ -19,7 +19,8 @@ make clean && make
 
 ## Game flow
 
-`TITLE` → Start → `PLAY` → deliver package → `WIN` → Start → `TITLE`
+`TITLE` → Start → `PLAY` (20s) → deliver → `WIN`  
+`PLAY` → timer 0 → `TIMEOUT` (pan + truck leaves) → `FAIL` → Start → `TITLE`
 
 | Control | Action |
 |---------|--------|

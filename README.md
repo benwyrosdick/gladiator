@@ -44,10 +44,10 @@ make clean
 | **A** | Jump (hold longer for higher jump) |
 | **Down + A** | Drop through a shelf/platform |
 
-1. Title screen: **VESYL SHIPPER** — press **Start**
+1. Title screen: **VESYL SHIPPER** — press **Start** (**20s** timer starts)
 2. Climb shelves, hold **B** near the package to pick it up (keep holding)
-3. Run/jump to the truck; release **B** to drop if needed
-4. Reach the truck while carrying → **DELIVERED!**
+3. Exit the warehouse door and reach the truck while carrying → **DELIVERED!**
+4. If the clock hits **00**, the camera pans to the exit, the truck pulls away → **TIME UP!**
 
 ## Layout
 

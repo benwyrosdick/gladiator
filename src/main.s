@@ -18,10 +18,12 @@ PPUDATA   = $2007
 OAMDMA    = $4014
 
 ; Game states
-STATE_TITLE = 0
-STATE_PLAY  = 1
-STATE_WIN   = 2
-STATE_PAUSE = 3
+STATE_TITLE    = 0
+STATE_PLAY     = 1
+STATE_WIN      = 2
+STATE_PAUSE    = 3
+STATE_TIMEOUT  = 4          ; pan to exit + truck pulls away
+STATE_FAIL     = 5          ; TIME UP static screen
 
 ; Controller bits after read_controller (ROL serial read):
 ; bit7=A bit6=B bit5=Select bit4=Start bit3=Up bit2=Down bit1=Left bit0=Right
@@ -103,6 +105,16 @@ TRUCK_LEFT_L  = $A0         ; 256+160=416
 TRUCK_LEFT_H  = $01
 TRUCK_RIGHT_L = $E0         ; 256+224=480
 TRUCK_RIGHT_H = $01
+TRUCK_TOP_Y   = 144         ; pixel Y of truck top row (tile row 18)
+TRUCK_W_TILES = 8
+TRUCK_H_TILES = 4
+
+; Level timer (NTSC)
+TIMER_SEC_INIT = 20
+FRAMES_PER_SEC = 60
+PAN_SPEED      = 4          ; scroll px/frame during timeout pan
+TRUCK_DRIVE_SPD = 2         ; truck pull-away px/frame
+TRUCK_DRIVE_MAX = 160       ; then fail screen
 
 ; -------------------------
 ; Zero page
@@ -143,6 +155,9 @@ package_y_sub:     .res 1   ; subpixel 0-15
 package_vel_x:     .res 1   ; signed, 1/16 px per frame
 package_vel_y:     .res 1   ; signed, 1/16 px per frame
 package_on_ground: .res 1
+timer_sec:         .res 1   ; remaining seconds
+timer_frames:      .res 1   ; frames until next second
+truck_drive:       .res 1   ; px truck has driven past parking (timeout)
 old_x_lo:          .res 1
 old_x_hi:          .res 1
 old_y:             .res 1
@@ -291,6 +306,18 @@ font_space:
 	.byte $42,$42,$24,$18,$08,$08,$08,$00,$42,$42,$24,$18,$08,$08,$08,$00 ; Y
 	.byte $7E,$02,$04,$08,$10,$20,$7E,$00,$7E,$02,$04,$08,$10,$20,$7E,$00 ; Z
 	.byte $08,$08,$08,$08,$08,$00,$08,$00,$08,$08,$08,$08,$08,$00,$08,$00 ; !
+; digits 0-9 for timer HUD
+font_digits:
+	.byte $3C,$66,$6E,$76,$66,$66,$3C,$00,$3C,$66,$6E,$76,$66,$66,$3C,$00 ; 0
+	.byte $18,$38,$18,$18,$18,$18,$7E,$00,$18,$38,$18,$18,$18,$18,$7E,$00 ; 1
+	.byte $3C,$66,$06,$0C,$18,$30,$7E,$00,$3C,$66,$06,$0C,$18,$30,$7E,$00 ; 2
+	.byte $3C,$66,$06,$1C,$06,$66,$3C,$00,$3C,$66,$06,$1C,$06,$66,$3C,$00 ; 3
+	.byte $0C,$1C,$3C,$6C,$7E,$0C,$0C,$00,$0C,$1C,$3C,$6C,$7E,$0C,$0C,$00 ; 4
+	.byte $7E,$60,$7C,$06,$06,$66,$3C,$00,$7E,$60,$7C,$06,$06,$66,$3C,$00 ; 5
+	.byte $3C,$60,$7C,$66,$66,$66,$3C,$00,$3C,$60,$7C,$66,$66,$66,$3C,$00 ; 6
+	.byte $7E,$06,$0C,$18,$30,$30,$30,$00,$7E,$06,$0C,$18,$30,$30,$30,$00 ; 7
+	.byte $3C,$66,$66,$3C,$66,$66,$3C,$00,$3C,$66,$66,$3C,$66,$66,$3C,$00 ; 8
+	.byte $3C,$66,$66,$3E,$06,$0C,$38,$00,$3C,$66,$66,$3E,$06,$0C,$38,$00 ; 9
 tiles_end:
 
 ; Tile indices from CHR labels (16 bytes per tile). Insert/reorder tiles freely;
@@ -313,6 +340,7 @@ T_PACKAGE_BR       = T_PACKAGE + 3
 T_TITLE_PACKAGE    = (title_package_tiles - tiles) / 16
 T_DELIVERY_TRUCK   = (delivery_truck_tiles - tiles) / 16
 T_FONT             = (font_space - tiles) / 16
+T_DIGIT0           = (font_digits - tiles) / 16
 ; font relative: 0=space, 1=A … 26=Z, 27=!
 
 ; Metasprite tile aliases (player_s_* labels)
@@ -390,6 +418,9 @@ str_press:
 str_win:
 	; D E L I V E R E D !
 	.byte 4,5,12,9,22,5,18,5,4, 27, $FF
+str_fail:
+	; T I M E   U P !
+	.byte 20,9,13,5, 0, 21,16, 27, $FF
 str_acme:
 	; A C M E
 	.byte 1,3,13,5, $FF
@@ -460,6 +491,10 @@ main_loop:
 	beq @pause
 	cmp #STATE_WIN
 	beq @win
+	cmp #STATE_TIMEOUT
+	beq @timeout
+	cmp #STATE_FAIL
+	beq @fail
 	jmp main_loop
 
 @title:
@@ -473,6 +508,12 @@ main_loop:
 	jmp main_loop
 @win:
 	jsr update_win
+	jmp main_loop
+@timeout:
+	jsr update_timeout
+	jmp main_loop
+@fail:
+	jsr update_fail
 	jmp main_loop
 
 ; -------------------------
@@ -639,9 +680,14 @@ enter_play:
 	sta package_y_sub
 	sta package_vel_x
 	sta package_vel_y
+	sta truck_drive
 	lda #1
 	sta package_on_ground
 	sta on_ground
+	lda #TIMER_SEC_INIT
+	sta timer_sec
+	lda #FRAMES_PER_SEC
+	sta timer_frames
 	lda #%10000000
 	sta ppuctrl_nt
 
@@ -671,6 +717,7 @@ update_play:
 	lda #STATE_PAUSE
 	sta game_state
 	jsr draw_play_sprites
+	jsr draw_timer_hud
 	jsr draw_pause_label
 	rts
 
@@ -692,8 +739,14 @@ update_play:
 	jsr update_camera
 	jsr update_package_carry    ; B held = carry (Mario shell style)
 	jsr update_free_package
+	jsr update_timer           ; may switch to STATE_TIMEOUT
+	lda game_state
+	cmp #STATE_PLAY
+	bne @done                 ; timed out this frame
 	jsr check_truck
 	jsr draw_play_sprites
+	jsr draw_timer_hud
+@done:
 	rts
 
 ; Frozen play scene; Start again resumes
@@ -704,9 +757,11 @@ update_pause:
 	lda #STATE_PLAY
 	sta game_state
 	jsr draw_play_sprites
+	jsr draw_timer_hud
 	rts
 @frozen:
 	jsr draw_play_sprites
+	jsr draw_timer_hud
 	jsr draw_pause_label
 	rts
 
@@ -1960,6 +2015,308 @@ check_truck:
 	cmp #TRUCK_RIGHT_L               ; past truck right (480)
 	bcs @done
 	jsr enter_win
+@done:
+	rts
+
+; -------------------------
+; Level timer (20s)
+; -------------------------
+update_timer:
+	lda timer_sec
+	beq @to
+	dec timer_frames
+	bne @done
+	lda #FRAMES_PER_SEC
+	sta timer_frames
+	dec timer_sec
+	bne @done
+@to:
+	jmp enter_timeout
+@done:
+	rts
+
+; A=0..99 → A=tens, temp=ones. Preserves X (critical: callers hold oam_idx in X).
+div10:
+	ldy #0                  ; tens counter in Y — do not touch X
+@loop:
+	cmp #10
+	bcc @done
+	sec
+	sbc #10
+	iny
+	jmp @loop
+@done:
+	sta temp                ; ones
+	tya                     ; tens
+	rts
+
+digit_to_tile:
+	clc
+	adc #T_DIGIT0
+	rts
+
+draw_timer_hud:
+	ldx oam_idx
+	lda timer_sec
+	jsr div10               ; must preserve X = oam_idx
+	sta temp2               ; tens
+	; tens digit
+	lda #16
+	sta oam_shadow, x
+	lda temp2
+	jsr digit_to_tile
+	sta oam_shadow+1, x
+	lda #%00000000
+	sta oam_shadow+2, x
+	lda #216
+	sta oam_shadow+3, x
+	; ones
+	lda #16
+	sta oam_shadow+4, x
+	lda temp
+	jsr digit_to_tile
+	sta oam_shadow+5, x
+	lda #%00000000
+	sta oam_shadow+6, x
+	lda #224
+	sta oam_shadow+7, x
+	txa
+	clc
+	adc #8
+	sta oam_idx
+	rts
+
+; -------------------------
+; Timeout: pan to exit, truck pulls away, then fail
+; -------------------------
+enter_timeout:
+	lda #STATE_TIMEOUT
+	sta game_state
+	lda #0
+	sta truck_drive
+	sta timer_sec
+	; Erase parked BG truck so sprite truck can leave
+	jsr wait_nmi_safe
+	lda #$00
+	sta PPUMASK
+	jsr erase_truck_bg
+	jsr wait_vblank
+	lda #%10000000
+	sta ppuctrl_nt
+	sta PPUCTRL
+	lda scroll_lo
+	sta PPUSCROLL
+	lda #$00
+	sta PPUSCROLL
+	lda #%00011110
+	sta PPUMASK
+	rts
+
+erase_truck_bg:
+	; Clear NT1 cols 20-27, rows 18-21 to sky (same cells draw_truck wrote)
+	bit PPUSTATUS
+	ldx #0                  ; row index 0..3
+@row:
+	txa
+	sta temp
+	; addr lo = (18+row)*32+20 = $54 + row*$20
+	lda #$54
+	sta temp2
+	ldy temp
+	beq @addr
+@add:
+	lda temp2
+	clc
+	adc #$20
+	sta temp2
+	dey
+	bne @add
+@addr:
+	lda #$26
+	sta PPUADDR
+	lda temp2
+	sta PPUADDR
+	ldy #8
+	lda #T_SKY
+@col:
+	sta PPUDATA
+	dey
+	bne @col
+	inx
+	cpx #4
+	bcc @row
+	rts
+
+update_timeout:
+	; Pan scroll toward max (256) if not there yet
+	lda scroll_hi
+	cmp #1
+	bne @pan
+	lda scroll_lo
+	beq @drive
+@pan:
+	lda scroll_lo
+	clc
+	adc #PAN_SPEED
+	sta scroll_lo
+	lda scroll_hi
+	adc #0
+	sta scroll_hi
+	; clamp to 256
+	cmp #1
+	bcc @setnt
+	lda #0
+	sta scroll_lo
+	lda #1
+	sta scroll_hi
+	jmp @setnt
+@drive:
+	lda truck_drive
+	clc
+	adc #TRUCK_DRIVE_SPD
+	sta truck_drive
+	cmp #TRUCK_DRIVE_MAX
+	bcc @setnt
+	jmp enter_fail
+@setnt:
+	lda #%10000000
+	ldx scroll_hi
+	beq @pp
+	ora #$01
+@pp:
+	sta ppuctrl_nt
+
+	jsr hide_all_sprites
+	lda #0
+	sta oam_idx
+	jsr draw_departing_truck
+	jsr draw_timer_hud
+	rts
+
+; Sprite truck at world X = TRUCK_LEFT + truck_drive (8×4 tiles, pal 3)
+draw_departing_truck:
+	; world_lo/hi
+	lda #TRUCK_LEFT_L
+	clc
+	adc truck_drive
+	sta temp3               ; world lo
+	lda #TRUCK_LEFT_H
+	adc #0
+	sta temp_hi             ; world hi
+	; screen x = world - scroll
+	lda temp3
+	sec
+	sbc scroll_lo
+	sta temp                ; base screen X
+	lda temp_hi
+	sbc scroll_hi
+	bne @done               ; not fully on screen (hi must be 0)
+	; draw 4 rows × 8 tiles
+	ldx oam_idx
+	lda #0
+	sta temp2               ; tile index within truck (0..31)
+	lda #TRUCK_TOP_Y
+	sta check_y             ; current row Y
+@row:
+	lda #0
+	sta temp3               ; col 0..7
+@col:
+	; Y
+	lda check_y
+	sta oam_shadow, x
+	; tile
+	lda temp2
+	clc
+	adc #T_DELIVERY_TRUCK
+	sta oam_shadow+1, x
+	; attr pal 3
+	lda #%00000011
+	sta oam_shadow+2, x
+	; X = base + col*8
+	lda temp3
+	asl a
+	asl a
+	asl a
+	clc
+	adc temp
+	sta oam_shadow+3, x
+	txa
+	clc
+	adc #4
+	tax
+	inc temp2
+	inc temp3
+	lda temp3
+	cmp #TRUCK_W_TILES
+	bcc @col
+	lda check_y
+	clc
+	adc #8
+	sta check_y
+	lda temp2
+	cmp #TRUCK_W_TILES * TRUCK_H_TILES
+	bcc @row
+	stx oam_idx
+@done:
+	rts
+
+; -------------------------
+; Fail screen (after truck leaves)
+; -------------------------
+enter_fail:
+	lda #STATE_FAIL
+	sta game_state
+	lda #$00
+	sta scroll_lo
+	sta scroll_hi
+	lda #%10000000
+	sta ppuctrl_nt
+
+	jsr wait_nmi_safe
+	lda #$00
+	sta PPUMASK
+
+	jsr clear_nametables
+
+	lda #$21
+	sta str_nt_hi
+	lda #$8B
+	sta str_nt_lo
+	lda #<str_fail
+	sta ptr_lo
+	lda #>str_fail
+	sta ptr_hi
+	jsr draw_string
+
+	lda #$22
+	sta str_nt_hi
+	lda #$0A
+	sta str_nt_lo
+	lda #<str_press
+	sta ptr_lo
+	lda #>str_press
+	sta ptr_hi
+	jsr draw_string
+
+	jsr hide_all_sprites
+
+	jsr wait_vblank
+	lda #%10000000
+	sta ppuctrl_nt
+	sta PPUCTRL
+	lda #0
+	sta PPUSCROLL
+	sta PPUSCROLL
+	lda #%00011110
+	sta PPUMASK
+	rts
+
+update_fail:
+	jsr hide_all_sprites
+	lda pad1_edge
+	and #BTN_START
+	beq @done
+	jsr enter_title
 @done:
 	rts
 
