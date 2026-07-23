@@ -74,20 +74,17 @@ WH_DOOR_TOP   = 144         ; open doorway for y >= 144 (tile rows 18+)
 WH_CEILING    = 40          ; bottom of ceiling (row 5 → y 40)
 
 ; Climbable shelves inside warehouse (~24px steps)
-SHELF_LOW_Y   = 152         ; row 19
 SHELF_MID_Y   = 128         ; row 16
 SHELF_HIGH_Y  = 104         ; row 13 — package spawn
-SHELF_LOW_L   = 24
-SHELF_LOW_R   = 80
-SHELF_MID_L   = 48
-SHELF_MID_R   = 112
-SHELF_HIGH_L  = 40
-SHELF_HIGH_R  = 96
+SHELF_MID_L   = 104
+SHELF_MID_R   = 152
+SHELF_HIGH_L  = 24
+SHELF_HIGH_R  = 72
 
 ; Interior bridges deeper in warehouse (still before exit at 400)
-PLAT1_Y       = 144         ; world x 160-224
-PLAT1_L       = 160
-PLAT1_R       = 224
+PLAT1_Y       = 144         ; world x 184-248
+PLAT1_L       = 184
+PLAT1_R       = 248
 PLAT2_Y       = 152         ; world x 320-384 (hi=1)
 PLAT2_L_LO    = 64          ; 320-256
 PLAT2_R_LO    = 128         ; 384-256
@@ -225,7 +222,7 @@ package_tiles:
 	.byte $80,$80,$80,$FF,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$00,$00,$00,$00  ; 2
 	.byte $10,$10,$10,$F0,$00,$00,$00,$00,$F0,$F0,$F0,$F0,$00,$00,$00,$00  ; 3
 
-; title flat shipping box 6x3 — front view
+; title flat shipping box 6x4 — front view
 ; 0=black outline/icons  1=light panel+label  2=cardboard  3=red tape/border
 title_package_tiles:
 	.byte $03,$04,$08,$10,$20,$40,$FF,$80,$00,$03,$07,$0F,$1F,$3F,$00,$7F  ; 0
@@ -235,19 +232,26 @@ title_package_tiles:
 	.byte $FF,$00,$00,$00,$00,$00,$FF,$00,$00,$FF,$FF,$FF,$FF,$FF,$00,$FF  ; 4
 	.byte $FE,$03,$05,$09,$11,$21,$C1,$41,$00,$FC,$FA,$F6,$EE,$DE,$3E,$BE  ; 5
 
-	.byte $80,$80,$80,$80,$80,$80,$BF,$A0,$7F,$7F,$7F,$7F,$7F,$7F,$7F,$7F  ; 6
-	.byte $00,$00,$00,$00,$00,$00,$EF,$28,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 7
-	.byte $3F,$3F,$15,$00,$00,$00,$F0,$10,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 8
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 9
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 10
+	.byte $80,$80,$80,$80,$80,$80,$80,$80,$7F,$7F,$7F,$7F,$7F,$7F,$7F,$7F  ; 6
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 7
+	.byte $3F,$3F,$15,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 8
+	.byte $00,$00,$1F,$1F,$1F,$1F,$1F,$1F,$FF,$FF,$E0,$E0,$E7,$E7,$E0,$E7  ; 9
+	.byte $00,$00,$FC,$FC,$FC,$FC,$FC,$FC,$FF,$FF,$03,$03,$C3,$C3,$03,$F3  ; 10
 	.byte $41,$41,$41,$41,$41,$41,$41,$41,$BE,$BE,$BE,$BE,$BE,$BE,$BE,$BE  ; 11
 
-	.byte $A2,$A7,$AF,$A2,$A2,$BF,$80,$7F,$7F,$7F,$7F,$7F,$7F,$7F,$7F,$00  ; 12
-	.byte $2B,$2A,$A9,$2B,$28,$EF,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00  ; 13
-	.byte $D0,$50,$90,$D0,$10,$F0,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00  ; 14
-	.byte $00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00  ; 15
-	.byte $00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00  ; 16
-	.byte $41,$41,$42,$44,$48,$50,$60,$C0,$BE,$BE,$BC,$B8,$B0,$A0,$80,$00  ; 17
+	.byte $80,$80,$80,$80,$80,$80,$BF,$A0,$7F,$7F,$7F,$7F,$7F,$7F,$7F,$7F  ; 12
+	.byte $00,$00,$00,$00,$00,$00,$EF,$28,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 13
+	.byte $00,$00,$00,$00,$00,$00,$F0,$10,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 14
+	.byte $1F,$1F,$1F,$1F,$1F,$1F,$1F,$00,$E0,$E0,$E5,$E5,$E7,$E0,$E0,$FF  ; 15
+	.byte $FC,$FC,$FC,$FC,$FC,$FC,$FC,$00,$03,$03,$73,$F3,$53,$03,$03,$FF  ; 16
+	.byte $41,$41,$41,$41,$41,$41,$41,$41,$BE,$BE,$BE,$BE,$BE,$BE,$BE,$BE  ; 17
+
+	.byte $A2,$A7,$AF,$A2,$A2,$BF,$80,$7F,$7F,$7F,$7F,$7F,$7F,$7F,$7F,$00  ; 18
+	.byte $2B,$2A,$A9,$2B,$28,$EF,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00  ; 19
+	.byte $D0,$50,$90,$D0,$10,$F0,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00  ; 20
+	.byte $00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00  ; 21
+	.byte $00,$00,$00,$00,$00,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00  ; 22
+	.byte $41,$41,$42,$44,$48,$50,$60,$C0,$BE,$BE,$BC,$B8,$B0,$A0,$80,$00  ; 23
 
 ; delivery truck 8x4 — yellow/red van, facing right
 ; 0=empty (sky)  1=yellow body  2=red cab/lines  3=dark outline+tires (visible on black)
@@ -552,7 +556,7 @@ enter_title:
 	jsr clear_nametables
 	jsr draw_title_screen
 
-	jsr hide_all_sprites
+	jsr draw_title_box_sprites
 
 	jsr wait_vblank
 	lda #%10000000
@@ -566,7 +570,7 @@ enter_title:
 	rts
 
 update_title:
-	jsr hide_all_sprites
+	jsr draw_title_box_sprites
 	; Start edge?
 	lda pad1_edge
 	and #BTN_START
@@ -575,48 +579,56 @@ update_title:
 @done:
 	rts
 
+; Title box as sprites so it can sit on a 4px (not 8px) Y offset.
+; Tile row 9 + 4px → Y=76; cols 13-18 → X=104. Spr pal 1 = package colors.
+; Color 0 is transparent → black sky shows through as outline.
+TITLE_BOX_Y = 9 * 8 + 4
+TITLE_BOX_X = 13 * 8
+
+draw_title_box_sprites:
+	jsr hide_all_sprites
+	ldx #0                  ; OAM byte index
+	ldy #0                  ; tile index 0..23
+	lda #TITLE_BOX_Y
+	sta temp2               ; row pixel Y
+@row:
+	lda #TITLE_BOX_X
+	sta temp3               ; col pixel X
+	lda #6
+	sta temp                ; columns left in this row
+@col:
+	lda temp2
+	sta oam_shadow, x
+	tya
+	clc
+	adc #T_TITLE_PACKAGE
+	sta oam_shadow+1, x
+	lda #%00000001          ; sprite palette 1
+	sta oam_shadow+2, x
+	lda temp3
+	sta oam_shadow+3, x
+	txa
+	clc
+	adc #4
+	tax
+	iny
+	lda temp3
+	clc
+	adc #8
+	sta temp3
+	dec temp
+	bne @col
+	lda temp2
+	clc
+	adc #8
+	sta temp2
+	cpy #24
+	bcc @row
+	stx oam_idx
+	rts
+
 draw_title_screen:
-	; Flat shipping box 6x3 tiles, rows 9-11, cols 13-18 (centered)
-	; $2000 + 9*32 + 13 = $212D
-	lda #$21
-	sta PPUADDR
-	lda #$2D
-	sta PPUADDR
-	ldx #0
-@row0:
-	txa
-	clc
-	adc #T_TITLE_PACKAGE
-	sta PPUDATA
-	inx
-	cpx #6
-	bne @row0
-
-	lda #$21
-	sta PPUADDR
-	lda #$4D                ; row 10, col 13
-	sta PPUADDR
-@row1:
-	txa
-	clc
-	adc #T_TITLE_PACKAGE
-	sta PPUDATA
-	inx
-	cpx #12
-	bne @row1
-
-	lda #$21
-	sta PPUADDR
-	lda #$6D                ; row 11, col 13
-	sta PPUADDR
-@row2:
-	txa
-	clc
-	adc #T_TITLE_PACKAGE
-	sta PPUDATA
-	inx
-	cpx #18
-	bne @row2
+	; Text only — box is sprite-drawn (pixel Y for +4px offset)
 
 	; "VESYL SHIPPER" row 6, col 9
 	lda #$20
@@ -640,7 +652,7 @@ draw_title_screen:
 	sta ptr_hi
 	jsr draw_string
 
-	; Attributes: box uses palette 1 (light / card / red)
+	; Attributes all palette 0 (black sky + white text from pal 0)
 	lda #$23
 	sta PPUADDR
 	lda #$C0
@@ -651,15 +663,6 @@ draw_title_screen:
 	sta PPUDATA
 	dex
 	bne @attr
-	; rows 8-11, cols 12-19 → attr $D3,$D4  (and $D5 for col 20 edge)
-	lda #$23
-	sta PPUADDR
-	lda #$D3
-	sta PPUADDR
-	lda #$55
-	sta PPUDATA
-	sta PPUDATA
-	sta PPUDATA
 	rts
 
 ; -------------------------
@@ -872,23 +875,16 @@ feet_on_any_platform:
 @mid:
 	lda check_y
 	cmp #SHELF_MID_Y
-	bne @low
+	bne @plat1
 	jsr x_overlap_shelf_mid
 	bcs @yes
-@low:
-	lda check_y
-	cmp #SHELF_LOW_Y
-	bne @out1
-	jsr x_overlap_shelf_low
-	bcs @yes
-@out1:
+@plat1:
 	lda check_y
 	cmp #PLAT1_Y
-	bne @out2
+	bne @plat2
 	jsr plat1_x_overlap
 	bcs @yes
-@out2:
-	; plat 2 may share Y with SHELF_LOW — always test
+@plat2:
 	lda check_y
 	cmp #PLAT2_Y
 	bne @no
@@ -929,23 +925,6 @@ x_overlap_shelf_mid:
 	clc
 	adc temp3
 	cmp #SHELF_MID_L + 1
-	bcc @no
-	sec
-	rts
-@no:
-	clc
-	rts
-
-; shelf low [SHELF_LOW_L, SHELF_LOW_R)
-x_overlap_shelf_low:
-	lda check_x_hi
-	bne @no
-	lda check_x_lo
-	cmp #SHELF_LOW_R
-	bcs @no
-	clc
-	adc temp3
-	cmp #SHELF_LOW_L + 1
 	bcc @no
 	sec
 	rts
@@ -1391,16 +1370,11 @@ collide_vertical:
 	jsr accept_platform_land
 	bcs @snap
 @2:
-	jsr try_land_shelf_low
+	jsr try_land_plat1
 	bcc @3
 	jsr accept_platform_land
 	bcs @snap
 @3:
-	jsr try_land_plat1
-	bcc @4
-	jsr accept_platform_land
-	bcs @snap
-@4:
 	jsr try_land_plat2
 	bcc @done
 	jsr accept_platform_land
@@ -1456,21 +1430,6 @@ try_land_shelf_mid:
 	jsr x_overlap_shelf_mid
 	bcc @no
 	lda #SHELF_MID_Y
-	sec
-	rts
-@no:
-	clc
-	rts
-
-try_land_shelf_low:
-	lda check_y
-	cmp #SHELF_LOW_Y
-	bcc @no
-	cmp #SHELF_LOW_Y + 8
-	bcs @no
-	jsr x_overlap_shelf_low
-	bcc @no
-	lda #SHELF_LOW_Y
 	sec
 	rts
 @no:
@@ -1783,8 +1742,6 @@ update_free_package:
 	jsr try_land_shelf_high
 	bcs @snap
 	jsr try_land_shelf_mid
-	bcs @snap
-	jsr try_land_shelf_low
 	bcs @snap
 	jsr try_land_plat1
 	bcs @snap
@@ -2783,54 +2740,43 @@ draw_warehouse:
 	cpx #18
 	bcc @exit_w
 
-	; Shelves (match collision X ranges)
-	; High shelf row 13 (y=104), cols 5-11 (x 40-96)
+	; Shelves — cols from SHELF_* ; tile count covers full [L,R) even if not 8-aligned:
+	;   col = L/8 , count = (R-1)/8 - L/8 + 1
+	; High shelf row 13 (y=SHELF_HIGH_Y)
 	lda #$21
 	sta PPUADDR
-	lda #$A5                ; 13*32+5
+	lda #($A0 + SHELF_HIGH_L / 8)   ; 13*32 + col
 	sta PPUADDR
-	ldx #7
+	ldx #((SHELF_HIGH_R - 1) / 8 - SHELF_HIGH_L / 8 + 1)
 	lda #T_PLATFORM
 @sh:
 	sta PPUDATA
 	dex
 	bne @sh
 
-	; Mid shelf row 16 (y=128), cols 6-13 (x 48-112)
+	; Mid shelf row 16 (y=SHELF_MID_Y) — NT0 only (x < 256)
 	lda #$22
 	sta PPUADDR
-	lda #$06                ; 16*32+6
+	lda #(SHELF_MID_L / 8)          ; 16*32 + col → hi $22, lo = col
 	sta PPUADDR
-	ldx #8
+	ldx #((SHELF_MID_R - 1) / 8 - SHELF_MID_L / 8 + 1)
 	lda #T_PLATFORM
 @sm:
 	sta PPUDATA
 	dex
 	bne @sm
-
-	; Low shelf row 19 (y=152), cols 3-9 (x 24-80)
-	lda #$22
-	sta PPUADDR
-	lda #$63                ; 19*32+3
-	sta PPUADDR
-	ldx #7
-	lda #T_PLATFORM
-@sl:
-	sta PPUDATA
-	dex
-	bne @sl
 	rts
 
 draw_platform_tiles:
 	; Interior bridges deeper in warehouse (before exit)
 	bit PPUSTATUS
 
-	; PLAT1: world 160-224, cols 20-27 NT0, row 18 (y=144)
+	; PLAT1: world [PLAT1_L, PLAT1_R), row 18 (y=PLAT1_Y), NT0
 	lda #$22
 	sta PPUADDR
-	lda #$54                ; 18*32+20
+	lda #($40 + PLAT1_L / 8)        ; 18*32 + col
 	sta PPUADDR
-	ldx #8
+	ldx #((PLAT1_R - 1) / 8 - PLAT1_L / 8 + 1)
 	lda #T_PLATFORM
 @p1:
 	sta PPUDATA
