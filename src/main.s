@@ -506,10 +506,13 @@ sfx_drop:
 	.byte $FF
 
 sfx_win:
-	.byte 0, $9E, $A0, $08, 5
-	.byte 0, $9E, $80, $08, 5
-	.byte 0, $9E, $60, $08, 6
-	.byte 0, $9F, $40, $08, 10
+	.byte 0, $9C, $AB, $09, 16
+	.byte 0, $9C, $AB, $09, 16
+	.byte 0, $98, $7C, $09, 16
+	.byte 0, $9C, $52, $09, 16
+	.byte 0, $9C, $AB, $09, 16
+	.byte 0, $9C, $52, $09, 16
+	.byte 0, $9C, $7C, $09, 32
 	.byte $FF
 
 sfx_timeout:

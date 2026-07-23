@@ -198,6 +198,17 @@
     max-width: 420px;
     width: auto;
   }
+  .step .note-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  .step .note-row select {
+    min-width: 64px;
+  }
   .step .actions {
     display: flex;
     flex-direction: column;
@@ -428,13 +439,35 @@
     "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
   ];
 
+  function midiFromHz(hz) {
+    if (!hz || hz < 20) return 0;
+    return 69 + 12 * Math.log2(hz / 440);
+  }
+
+  function hzFromMidi(midi) {
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  /** { noteIndex 0–11, octave } from Hz */
+  function noteOctFromHz(hz) {
+    const midi = Math.round(midiFromHz(hz));
+    const noteIndex = ((midi % 12) + 12) % 12;
+    const octave = Math.floor(midi / 12) - 1;
+    return {
+      noteIndex,
+      octave: Math.max(0, Math.min(8, octave)),
+      midi,
+    };
+  }
+
+  function midiFromNoteOct(noteIndex, octave) {
+    return (octave + 1) * 12 + (noteIndex | 0);
+  }
+
   function noteFromHz(hz) {
     if (!hz || hz < 20) return "—";
-    const midi = 69 + 12 * Math.log2(hz / 440);
-    const m = Math.round(midi);
-    const name = NOTE_NAMES[((m % 12) + 12) % 12];
-    const oct = Math.floor(m / 12) - 1;
-    return name + oct;
+    const { noteIndex, octave } = noteOctFromHz(hz);
+    return NOTE_NAMES[noteIndex] + octave;
   }
 
   /** Approx noise pitch from $400E period nibble */
@@ -764,21 +797,8 @@
 
       const freq = document.createElement("span");
       freq.className = "freq";
-      function refreshPitchLabel() {
-        if (st.type === 0) {
-          const hz = pulseHz(st.b, st.c);
-          const t = pulsePeriod(st.b, st.c);
-          freq.textContent = hz
-            ? noteFromHz(hz) + " · " + hz.toFixed(0) + " Hz · t=" + t
-            : "—";
-        } else {
-          freq.textContent = "n=" + (st.b & 0x0f);
-        }
-      }
-      refreshPitchLabel();
-      fields.appendChild(freq);
 
-      // Pitch slider under the hex fields
+      // Pitch controls under the hex fields
       const pitchRow = document.createElement("div");
       pitchRow.className = "pitch-row";
       const pitchLab = document.createElement("span");
@@ -799,18 +819,88 @@
           ? "Pulse pitch (updates period_lo + $4003 timer high bits)"
           : "Noise period nibble ($400E bits 0–3)";
 
+      // Note / octave selectors (pulse only)
+      let noteSel = null;
+      let octSel = null;
+      const noteRow = document.createElement("div");
+      noteRow.className = "note-row";
+
+      function applyPulseHz(hz, opts) {
+        setPulsePeriod(st, periodFromHz(hz));
+        inpB.value = hexByte(st.b);
+        inpC.value = hexByte(st.c);
+        if (!opts || !opts.skipSlider) {
+          slider.value = String(sliderFromHz(hz));
+        }
+        if (!opts || !opts.skipSelects) {
+          syncNoteSelects(hz);
+        }
+        refreshPitchLabel();
+        syncExport();
+      }
+
+      function syncNoteSelects(hz) {
+        if (!noteSel || !octSel) return;
+        const { noteIndex, octave } = noteOctFromHz(hz || PULSE_HZ_MIN);
+        noteSel.value = String(noteIndex);
+        octSel.value = String(octave);
+      }
+
+      function refreshPitchLabel() {
+        if (st.type === 0) {
+          const hz = pulseHz(st.b, st.c);
+          const t = pulsePeriod(st.b, st.c);
+          freq.textContent = hz
+            ? noteFromHz(hz) + " · " + hz.toFixed(0) + " Hz · t=" + t
+            : "—";
+        } else {
+          freq.textContent = "n=" + (st.b & 0x0f);
+        }
+      }
+
       if (st.type === 0) {
+        const curHz = pulseHz(st.b, st.c) || PULSE_HZ_MIN;
         slider.min = "0";
         slider.max = "1000";
-        slider.value = String(sliderFromHz(pulseHz(st.b, st.c) || PULSE_HZ_MIN));
+        slider.value = String(sliderFromHz(curHz));
         slider.addEventListener("input", () => {
-          const hz = hzFromSlider(+slider.value);
-          setPulsePeriod(st, periodFromHz(hz));
-          inpB.value = hexByte(st.b);
-          inpC.value = hexByte(st.c);
-          refreshPitchLabel();
-          syncExport();
+          applyPulseHz(hzFromSlider(+slider.value), { skipSlider: true });
         });
+
+        const noteLab = document.createElement("div");
+        noteLab.className = "field-group";
+        noteLab.innerHTML = "<span>Note</span>";
+        noteSel = document.createElement("select");
+        NOTE_NAMES.forEach((n, ni) => {
+          const o = document.createElement("option");
+          o.value = String(ni);
+          o.textContent = n;
+          noteSel.appendChild(o);
+        });
+        noteLab.appendChild(noteSel);
+        noteRow.appendChild(noteLab);
+
+        const octLab = document.createElement("div");
+        octLab.className = "field-group";
+        octLab.innerHTML = "<span>Octave</span>";
+        octSel = document.createElement("select");
+        for (let o = 0; o <= 8; o++) {
+          const opt = document.createElement("option");
+          opt.value = String(o);
+          opt.textContent = String(o);
+          octSel.appendChild(opt);
+        }
+        octLab.appendChild(octSel);
+        noteRow.appendChild(octLab);
+
+        syncNoteSelects(curHz);
+
+        function fromNoteSelects() {
+          const midi = midiFromNoteOct(+noteSel.value, +octSel.value);
+          applyPulseHz(hzFromMidi(midi), { skipSelects: true });
+        }
+        noteSel.addEventListener("change", fromNoteSelects);
+        octSel.addEventListener("change", fromNoteSelects);
       } else {
         slider.min = "0";
         slider.max = "15";
@@ -823,6 +913,10 @@
           refreshPitchLabel();
           syncExport();
         });
+        const noiseHint = document.createElement("span");
+        noiseHint.className = "hint-sm";
+        noiseHint.textContent = "noise has no musical note map";
+        noteRow.appendChild(noiseHint);
       }
       pitchRow.appendChild(slider);
 
@@ -831,7 +925,10 @@
       highTag.textContent = "high";
       pitchRow.appendChild(highTag);
 
+      refreshPitchLabel();
+      fields.appendChild(freq);
       fields.appendChild(pitchRow);
+      fields.appendChild(noteRow);
       row.appendChild(fields);
 
       const actions = document.createElement("div");
