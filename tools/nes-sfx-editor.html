@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NES SFX Editor</title>
+<style>
+  :root {
+    --bg: #1a1b26;
+    --panel: #24283b;
+    --border: #414868;
+    --text: #c0caf5;
+    --muted: #565f89;
+    --accent: #7aa2f7;
+    --accent2: #9ece6a;
+    --danger: #f7768e;
+    --warn: #e0af68;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 14px/1.4 "SF Mono", "Consolas", "Menlo", monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  header .hint { color: var(--muted); font-size: 12px; }
+  header a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 12px;
+  }
+  header a:hover { text-decoration: underline; }
+  main {
+    display: grid;
+    grid-template-columns: 1fr minmax(420px, 38vw);
+    gap: 0;
+    min-height: calc(100vh - 52px);
+  }
+  main.sidebar-collapsed { grid-template-columns: 1fr; }
+  @media (max-width: 900px) {
+    main:not(.sidebar-collapsed) { grid-template-columns: 1fr; }
+  }
+  .workspace {
+    padding: 16px 20px;
+    overflow: auto;
+  }
+  .sidebar {
+    border-left: 1px solid var(--border);
+    background: var(--panel);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    overflow: auto;
+  }
+  main.sidebar-collapsed .sidebar { display: none; }
+  #btnSidebar { margin-left: auto; }
+  main.sidebar-collapsed #btnSidebar {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  label { color: var(--muted); font-size: 12px; }
+  input[type="number"], input[type="text"], select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: 4px;
+    font: inherit;
+  }
+  input[type="number"] { width: 64px; }
+  input[type="text"].wide { width: 100%; }
+  input[type="range"] {
+    width: 120px;
+    accent-color: var(--accent);
+  }
+  button {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 4px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #1a1b26;
+    font-weight: 600;
+  }
+  button.primary:hover { filter: brightness(1.08); color: #1a1b26; }
+  button.danger:hover { border-color: var(--danger); color: var(--danger); }
+  button.sm { padding: 4px 8px; font-size: 12px; }
+  .panel-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 6px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 280px;
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 10px;
+    font: 11px/1.35 "SF Mono", "Consolas", "Menlo", monospace;
+    resize: vertical;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .status {
+    font-size: 12px;
+    color: var(--muted);
+    min-height: 1.2em;
+  }
+  .status.ok { color: var(--accent2); }
+  .status.err { color: var(--danger); }
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+  .hint-sm {
+    margin: 0;
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .step {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    gap: 10px;
+    align-items: start;
+  }
+  .step.playing {
+    border-color: var(--accent2);
+    box-shadow: 0 0 0 1px rgba(158, 206, 106, 0.25);
+  }
+  .step .idx {
+    color: var(--muted);
+    font-size: 12px;
+    padding-top: 8px;
+  }
+  .step .fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+  }
+  .step .pitch-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 100%;
+    width: 100%;
+    margin-top: 4px;
+  }
+  .step .pitch-row input[type="range"] {
+    flex: 1;
+    min-width: 160px;
+    max-width: 420px;
+    width: auto;
+  }
+  .step .actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .step select { min-width: 88px; }
+  .step .freq {
+    color: var(--warn);
+    font-size: 11px;
+    min-width: 100px;
+  }
+  .chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .chip.pulse { border-color: var(--accent); color: var(--accent); }
+  .chip.noise { border-color: var(--warn); color: var(--warn); }
+  .timeline {
+    height: 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    margin-top: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .timeline .bar {
+    height: 100%;
+    width: 0%;
+    background: var(--accent2);
+    transition: width 0.05s linear;
+  }
+  .presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .field-group > span {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>NES SFX Editor</h1>
+  <span class="hint">VESYL pulse1 + noise sequences · 5-byte steps · <code>$FF</code> end · ca65 import/copy</span>
+  <a href="nes-tile-editor.html">Tile editor</a>
+  <button type="button" id="btnSidebar" title="Toggle bytes sidebar (])">Hide bytes</button>
+</header>
+<main id="main">
+  <section class="workspace">
+    <div class="row" style="margin-bottom:12px">
+      <label>Label <input type="text" id="label" value="sfx_jump" style="width:160px" /></label>
+      <button class="primary" id="btnPlay">Play ▶</button>
+      <button id="btnStop">Stop</button>
+      <button id="btnAdd">+ Step</button>
+      <label>Vol <input type="range" id="masterVol" min="0" max="100" value="40" /></label>
+      <span class="chip" id="durChip">0 frames · 0.00s</span>
+    </div>
+
+    <p class="panel-title">Game presets</p>
+    <div class="presets" id="presets"></div>
+
+    <div class="timeline"><div class="bar" id="playBar"></div></div>
+
+    <p class="panel-title" style="margin-top:16px">Steps</p>
+    <p class="hint-sm">
+      Type <strong>0</strong> = pulse1: vol ($4000), period_lo, $4003, duration&nbsp;&nbsp;·&nbsp;&nbsp;
+      Type <strong>1</strong> = noise: vol ($400C), period ($400E), $400F, duration
+    </p>
+    <div class="steps" id="steps"></div>
+  </section>
+
+  <aside class="sidebar">
+    <div>
+      <p class="panel-title">ca65 sequence (paste / copy)</p>
+      <div class="row">
+        <button class="primary" id="btnImport">Import ←</button>
+        <button id="btnCopy">Copy</button>
+      </div>
+    </div>
+    <p class="status" id="status"></p>
+    <div class="divider"></div>
+    <textarea id="bytes" spellcheck="false"></textarea>
+    <p class="hint-sm">
+      Matches <code>src/main.s</code> SFX format. Paste a labeled block or raw
+      <code>.byte</code> lines, then Import. Play is a Web Audio approximation
+      (not cycle-accurate APU).
+    </p>
+  </aside>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  /** NTSC CPU clock for period → Hz */
+  const CPU = 1789773;
+  const FRAME = 1 / 60;
+
+  /** Default library from VESYL main.s */
+  const PRESETS = {
+    sfx_jump: [
+      { type: 0, a: 0x9c, b: 0xa8, c: 0x08, dur: 3 },
+      { type: 0, a: 0x9c, b: 0x80, c: 0x08, dur: 3 },
+      { type: 0, a: 0x98, b: 0x60, c: 0x08, dur: 4 },
+    ],
+    sfx_pickup: [
+      { type: 0, a: 0x9a, b: 0x90, c: 0x08, dur: 4 },
+      { type: 0, a: 0x9c, b: 0x60, c: 0x08, dur: 5 },
+      { type: 0, a: 0x9e, b: 0x40, c: 0x08, dur: 6 },
+    ],
+    sfx_drop: [
+      { type: 0, a: 0x98, b: 0xc0, c: 0x08, dur: 4 },
+      { type: 0, a: 0x94, b: 0xe8, c: 0x08, dur: 5 },
+      { type: 1, a: 0x3a, b: 0x0d, c: 0x08, dur: 4 },
+    ],
+    sfx_win: [
+      { type: 0, a: 0x9e, b: 0xa0, c: 0x08, dur: 5 },
+      { type: 0, a: 0x9e, b: 0x80, c: 0x08, dur: 5 },
+      { type: 0, a: 0x9e, b: 0x60, c: 0x08, dur: 6 },
+      { type: 0, a: 0x9f, b: 0x40, c: 0x08, dur: 10 },
+    ],
+    sfx_timeout: [
+      { type: 1, a: 0x3c, b: 0x0a, c: 0x18, dur: 6 },
+      { type: 1, a: 0x38, b: 0x0c, c: 0x18, dur: 8 },
+      { type: 0, a: 0x96, b: 0xf0, c: 0x28, dur: 10 },
+      { type: 0, a: 0x92, b: 0xf8, c: 0x28, dur: 12 },
+    ],
+  };
+
+  const labelEl = document.getElementById("label");
+  const bytesEl = document.getElementById("bytes");
+  const statusEl = document.getElementById("status");
+  const stepsEl = document.getElementById("steps");
+  const durChip = document.getElementById("durChip");
+  const playBar = document.getElementById("playBar");
+  const masterVolEl = document.getElementById("masterVol");
+
+  /** @type {{type:number,a:number,b:number,c:number,dur:number}[]} */
+  let steps = cloneSteps(PRESETS.sfx_jump);
+  let playTimer = null;
+  let audioCtx = null;
+  let activeNodes = [];
+  let playingIndex = -1;
+
+  function cloneSteps(arr) {
+    return arr.map((s) => ({ type: s.type, a: s.a, b: s.b, c: s.c, dur: s.dur }));
+  }
+
+  function setStatus(msg, kind) {
+    statusEl.textContent = msg || "";
+    statusEl.className = "status" + (kind ? " " + kind : "");
+  }
+
+  function hexByte(n) {
+    return "$" + (n & 0xff).toString(16).toUpperCase().padStart(2, "0");
+  }
+
+  function parseHex(v) {
+    if (typeof v === "number") return v & 0xff;
+    const s = String(v).trim().replace(/^\$/, "").replace(/^0x/i, "");
+    const n = parseInt(s, 16);
+    return Number.isFinite(n) ? n & 0xff : 0;
+  }
+
+  /** Pulse timer period (11-bit from lo + hi low 3 bits) */
+  function pulsePeriod(lo, hi) {
+    return (lo & 0xff) | ((hi & 0x07) << 8);
+  }
+
+  /** Pulse timer period → Hz */
+  function pulseHz(lo, hi) {
+    const t = pulsePeriod(lo, hi);
+    if (t < 8) return 0;
+    return CPU / (16 * (t + 1));
+  }
+
+  /** Hz → 11-bit pulse timer (clamped to usable range) */
+  function periodFromHz(hz) {
+    if (!hz || hz <= 0) return 2047;
+    const t = Math.round(CPU / (16 * hz) - 1);
+    return Math.max(8, Math.min(2047, t));
+  }
+
+  /**
+   * Set pulse pitch from 11-bit period.
+   * Keeps $4003 length-counter bits 7–3; only updates timer high bits 2–0.
+   */
+  function setPulsePeriod(step, t) {
+    t = Math.max(8, Math.min(2047, t | 0));
+    step.b = t & 0xff;
+    step.c = (step.c & 0xf8) | ((t >> 8) & 0x07);
+    return t;
+  }
+
+  /** Usable pulse Hz range for the slider (period 8 … 2047) */
+  const PULSE_HZ_MIN = CPU / (16 * 2048); // ~54.6 Hz
+  const PULSE_HZ_MAX = CPU / (16 * 9); // ~12.4 kHz (period 8)
+
+  /** Log-scale slider 0…1000 ↔ Hz */
+  function sliderFromHz(hz) {
+    const lo = Math.log(PULSE_HZ_MIN);
+    const hi = Math.log(PULSE_HZ_MAX);
+    const h = Math.max(PULSE_HZ_MIN, Math.min(PULSE_HZ_MAX, hz || PULSE_HZ_MIN));
+    return Math.round(((Math.log(h) - lo) / (hi - lo)) * 1000);
+  }
+
+  function hzFromSlider(pos) {
+    const lo = Math.log(PULSE_HZ_MIN);
+    const hi = Math.log(PULSE_HZ_MAX);
+    const p = Math.max(0, Math.min(1000, pos | 0)) / 1000;
+    return Math.exp(lo + p * (hi - lo));
+  }
+
+  const NOTE_NAMES = [
+    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+  ];
+
+  function noteFromHz(hz) {
+    if (!hz || hz < 20) return "—";
+    const midi = 69 + 12 * Math.log2(hz / 440);
+    const m = Math.round(midi);
+    const name = NOTE_NAMES[((m % 12) + 12) % 12];
+    const oct = Math.floor(m / 12) - 1;
+    return name + oct;
+  }
+
+  /** Approx noise pitch from $400E period nibble */
+  function noiseHz(periodByte) {
+    // NTSC noise periods (approx lookup for nibble 0..15)
+    const table = [
+      4, 8, 16, 32, 64, 96, 128, 160,
+      202, 254, 380, 508, 762, 1016, 2034, 4068,
+    ];
+    const p = table[periodByte & 0x0f];
+    return CPU / p;
+  }
+
+  /** Noise: keep mode bit 7, set period nibble 0–15 */
+  function setNoisePeriod(step, nibble) {
+    const n = Math.max(0, Math.min(15, nibble | 0));
+    step.b = (step.b & 0x80) | n;
+  }
+
+  function dutyFromVol(vol) {
+    // $4000 bits 7-6: 12.5%, 25%, 50%, 25% neg
+    const d = (vol >> 6) & 3;
+    return [0.125, 0.25, 0.5, 0.75][d];
+  }
+
+  function volLevel(vol) {
+    // constant volume mode: low nibble; bit 4 = constant
+    return (vol & 0x0f) / 15;
+  }
+
+  function totalFrames() {
+    return steps.reduce((s, st) => s + Math.max(1, st.dur | 0), 0);
+  }
+
+  function updateDuration() {
+    const f = totalFrames();
+    durChip.textContent = f + " frames · " + (f * FRAME).toFixed(2) + "s";
+  }
+
+  function exportBytes() {
+    const label = (labelEl.value || "sfx").trim().replace(/\s+/g, "_");
+    const lines = [label + ":"];
+    for (const st of steps) {
+      lines.push(
+        "\t.byte " +
+          st.type +
+          ", " +
+          hexByte(st.a) +
+          ", " +
+          hexByte(st.b) +
+          ", " +
+          hexByte(st.c) +
+          ", " +
+          (st.dur | 0)
+      );
+    }
+    lines.push("\t.byte $FF");
+    return lines.join("\n") + "\n";
+  }
+
+  function syncExport() {
+    bytesEl.value = exportBytes();
+    updateDuration();
+  }
+
+  /**
+   * Parse ca65 SFX paste. Uses first labeled block if multiple present,
+   * or sequential 5-byte groups until $FF.
+   */
+  function parseImport(text) {
+    if (!text || !text.trim()) throw new Error("Empty paste");
+    const cleaned = text.replace(/;.*$/gm, "\n");
+
+    const labelMatch = cleaned.match(/^\s*([A-Za-z_][\w]*)\s*:/m);
+    if (labelMatch) labelEl.value = labelMatch[1];
+
+    // Prefer content after first label through next label or end
+    let chunk = cleaned;
+    if (labelMatch) {
+      const re = new RegExp(
+        labelMatch[1] + "\\s*:([\\s\\S]*?)(?=^[A-Za-z_][\\w]*\\s*:|$)",
+        "m"
+      );
+      const m = cleaned.match(re);
+      if (m) chunk = m[1];
+    }
+
+    const bytes = [];
+    const re = /\$([0-9A-Fa-f]{1,2})\b|0x([0-9A-Fa-f]{1,2})\b|\b([01])\b(?=\s*,)/g;
+    // Simpler: grab all $hex and bare decimals that look like type/dur
+    const re2 = /\$([0-9A-Fa-f]{1,2})\b|0x([0-9A-Fa-f]{1,2})\b|\b(\d{1,3})\b/g;
+    let m;
+    while ((m = re2.exec(chunk)) !== null) {
+      if (m[1] || m[2]) bytes.push(parseInt(m[1] || m[2], 16) & 0xff);
+      else bytes.push(parseInt(m[3], 10) & 0xff);
+    }
+
+    if (bytes.length === 0) throw new Error("No bytes found");
+
+    const out = [];
+    let i = 0;
+    while (i < bytes.length) {
+      if (bytes[i] === 0xff) break;
+      if (i + 4 >= bytes.length) {
+        throw new Error("Truncated step at byte " + i + " (need 5 bytes or $FF)");
+      }
+      const type = bytes[i];
+      if (type !== 0 && type !== 1) {
+        throw new Error(
+          "Bad step type " + type + " at index " + i + " (want 0=pulse, 1=noise, or $FF)"
+        );
+      }
+      out.push({
+        type,
+        a: bytes[i + 1],
+        b: bytes[i + 2],
+        c: bytes[i + 3],
+        dur: Math.max(1, bytes[i + 4]),
+      });
+      i += 5;
+    }
+    if (out.length === 0) throw new Error("No steps before $FF");
+    steps = out;
+    return out.length;
+  }
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+
+  function stopPlayback() {
+    if (playTimer) {
+      clearTimeout(playTimer);
+      playTimer = null;
+    }
+    for (const n of activeNodes) {
+      try {
+        n.stop();
+      } catch (_) {}
+      try {
+        n.disconnect();
+      } catch (_) {}
+    }
+    activeNodes = [];
+    playingIndex = -1;
+    playBar.style.width = "0%";
+    renderSteps();
+  }
+
+  function makeNoiseBuffer(ctx, seconds) {
+    const len = Math.max(1, Math.floor(ctx.sampleRate * seconds));
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    let reg = 1;
+    for (let i = 0; i < len; i++) {
+      // 15-bit LFSR-ish
+      const bit = ((reg >> 0) ^ (reg >> 1)) & 1;
+      reg = (reg >> 1) | (bit << 14);
+      data[i] = bit ? 0.35 : -0.35;
+    }
+    return buf;
+  }
+
+  function playStepAudio(ctx, step, when, durationSec, masterGain) {
+    const g = ctx.createGain();
+    g.connect(masterGain);
+    const v = volLevel(step.a) * 0.5;
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.linearRampToValueAtTime(Math.max(0.0001, v), when + 0.005);
+    g.gain.setValueAtTime(Math.max(0.0001, v), when + Math.max(0.01, durationSec - 0.02));
+    g.gain.linearRampToValueAtTime(0.0001, when + durationSec);
+
+    if (step.type === 0) {
+      const osc = ctx.createOscillator();
+      osc.type = "square";
+      const hz = pulseHz(step.b, step.c);
+      osc.frequency.setValueAtTime(Math.max(20, hz || 20), when);
+      // Approximate duty with wave shaper is heavy; square is fine for design
+      osc.connect(g);
+      osc.start(when);
+      osc.stop(when + durationSec + 0.02);
+      activeNodes.push(osc, g);
+    } else {
+      const src = ctx.createBufferSource();
+      src.buffer = makeNoiseBuffer(ctx, durationSec + 0.05);
+      const filter = ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      const nhz = noiseHz(step.b);
+      filter.frequency.setValueAtTime(Math.min(8000, Math.max(80, nhz / 16)), when);
+      filter.Q.value = 0.7;
+      src.connect(filter);
+      filter.connect(g);
+      src.start(when);
+      src.stop(when + durationSec + 0.02);
+      activeNodes.push(src, filter, g);
+    }
+  }
+
+  function playAll() {
+    stopPlayback();
+    if (steps.length === 0) {
+      setStatus("No steps to play", "err");
+      return;
+    }
+    const ctx = ensureAudio();
+    const master = ctx.createGain();
+    master.gain.value = (masterVolEl.value | 0) / 100;
+    master.connect(ctx.destination);
+    activeNodes.push(master);
+
+    const t0 = ctx.currentTime + 0.05;
+    let t = t0;
+    let frameAt = 0;
+    const total = totalFrames();
+
+    steps.forEach((st, i) => {
+      const dur = Math.max(1, st.dur | 0);
+      const sec = dur * FRAME;
+      playStepAudio(ctx, st, t, sec, master);
+      // highlight schedule via timeouts
+      const startMs = (t - t0) * 1000;
+      setTimeout(() => {
+        playingIndex = i;
+        renderSteps();
+        playBar.style.width = Math.min(100, ((frameAt + dur) / total) * 100) + "%";
+      }, startMs);
+      t += sec;
+      frameAt += dur;
+    });
+
+    playTimer = setTimeout(() => {
+      playingIndex = -1;
+      playBar.style.width = "100%";
+      renderSteps();
+      setTimeout(() => {
+        playBar.style.width = "0%";
+      }, 200);
+      playTimer = null;
+      setStatus("Playback finished", "ok");
+    }, (t - t0) * 1000 + 50);
+
+    setStatus("Playing " + steps.length + " steps…", "ok");
+  }
+
+  function renderSteps() {
+    stepsEl.innerHTML = "";
+    steps.forEach((st, i) => {
+      const row = document.createElement("div");
+      row.className = "step" + (i === playingIndex ? " playing" : "");
+
+      const idx = document.createElement("div");
+      idx.className = "idx";
+      idx.textContent = String(i);
+      row.appendChild(idx);
+
+      const fields = document.createElement("div");
+      fields.className = "fields";
+
+      // type
+      const typeG = document.createElement("div");
+      typeG.className = "field-group";
+      typeG.innerHTML = "<span>Type</span>";
+      const typeSel = document.createElement("select");
+      typeSel.innerHTML =
+        '<option value="0">0 pulse</option><option value="1">1 noise</option>';
+      typeSel.value = String(st.type);
+      typeSel.addEventListener("change", () => {
+        st.type = +typeSel.value;
+        syncExport();
+        renderSteps();
+      });
+      typeG.appendChild(typeSel);
+      fields.appendChild(typeG);
+
+      const chip = document.createElement("span");
+      chip.className = "chip " + (st.type === 0 ? "pulse" : "noise");
+      chip.textContent = st.type === 0 ? "pulse1" : "noise";
+      fields.appendChild(chip);
+
+      // vol
+      fields.appendChild(
+        numField(st.type === 0 ? "Vol $4000" : "Vol $400C", st.a, (v) => {
+          st.a = v;
+          syncExport();
+        })
+      );
+      // b / c — period fields (updated by pitch slider)
+      const fieldB = numField(
+        st.type === 0 ? "Period lo" : "Period $400E",
+        st.b,
+        (v) => {
+          st.b = v;
+          syncExport();
+          renderSteps();
+        }
+      );
+      const fieldC = numField(st.type === 0 ? "$4003" : "$400F", st.c, (v) => {
+        st.c = v;
+        syncExport();
+        renderSteps();
+      });
+      const inpB = fieldB.querySelector("input");
+      const inpC = fieldC.querySelector("input");
+      fields.appendChild(fieldB);
+      fields.appendChild(fieldC);
+
+      // duration
+      const durG = document.createElement("div");
+      durG.className = "field-group";
+      durG.innerHTML = "<span>Frames</span>";
+      const durIn = document.createElement("input");
+      durIn.type = "number";
+      durIn.min = 1;
+      durIn.max = 255;
+      durIn.value = st.dur;
+      durIn.addEventListener("change", () => {
+        st.dur = Math.max(1, Math.min(255, +durIn.value || 1));
+        durIn.value = st.dur;
+        syncExport();
+      });
+      durG.appendChild(durIn);
+      fields.appendChild(durG);
+
+      const freq = document.createElement("span");
+      freq.className = "freq";
+      function refreshPitchLabel() {
+        if (st.type === 0) {
+          const hz = pulseHz(st.b, st.c);
+          const t = pulsePeriod(st.b, st.c);
+          freq.textContent = hz
+            ? noteFromHz(hz) + " · " + hz.toFixed(0) + " Hz · t=" + t
+            : "—";
+        } else {
+          freq.textContent = "n=" + (st.b & 0x0f);
+        }
+      }
+      refreshPitchLabel();
+      fields.appendChild(freq);
+
+      // Pitch slider under the hex fields
+      const pitchRow = document.createElement("div");
+      pitchRow.className = "pitch-row";
+      const pitchLab = document.createElement("span");
+      pitchLab.className = "panel-title";
+      pitchLab.style.margin = "0";
+      pitchLab.textContent = "Pitch";
+      pitchRow.appendChild(pitchLab);
+
+      const lowTag = document.createElement("span");
+      lowTag.className = "hint-sm";
+      lowTag.textContent = "low";
+      pitchRow.appendChild(lowTag);
+
+      const slider = document.createElement("input");
+      slider.type = "range";
+      slider.title =
+        st.type === 0
+          ? "Pulse pitch (updates period_lo + $4003 timer high bits)"
+          : "Noise period nibble ($400E bits 0–3)";
+
+      if (st.type === 0) {
+        slider.min = "0";
+        slider.max = "1000";
+        slider.value = String(sliderFromHz(pulseHz(st.b, st.c) || PULSE_HZ_MIN));
+        slider.addEventListener("input", () => {
+          const hz = hzFromSlider(+slider.value);
+          setPulsePeriod(st, periodFromHz(hz));
+          inpB.value = hexByte(st.b);
+          inpC.value = hexByte(st.c);
+          refreshPitchLabel();
+          syncExport();
+        });
+      } else {
+        slider.min = "0";
+        slider.max = "15";
+        // right = higher pitch (lower nibble)
+        slider.value = String(15 - (st.b & 0x0f));
+        slider.addEventListener("input", () => {
+          const n = 15 - (+slider.value | 0);
+          setNoisePeriod(st, n);
+          inpB.value = hexByte(st.b);
+          refreshPitchLabel();
+          syncExport();
+        });
+      }
+      pitchRow.appendChild(slider);
+
+      const highTag = document.createElement("span");
+      highTag.className = "hint-sm";
+      highTag.textContent = "high";
+      pitchRow.appendChild(highTag);
+
+      fields.appendChild(pitchRow);
+      row.appendChild(fields);
+
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const up = document.createElement("button");
+      up.className = "sm";
+      up.textContent = "↑";
+      up.title = "Move up";
+      up.disabled = i === 0;
+      up.addEventListener("click", () => {
+        if (i === 0) return;
+        [steps[i - 1], steps[i]] = [steps[i], steps[i - 1]];
+        syncExport();
+        renderSteps();
+      });
+      const down = document.createElement("button");
+      down.className = "sm";
+      down.textContent = "↓";
+      down.title = "Move down";
+      down.disabled = i === steps.length - 1;
+      down.addEventListener("click", () => {
+        if (i >= steps.length - 1) return;
+        [steps[i + 1], steps[i]] = [steps[i], steps[i + 1]];
+        syncExport();
+        renderSteps();
+      });
+      const playOne = document.createElement("button");
+      playOne.className = "sm";
+      playOne.textContent = "▶";
+      playOne.title = "Play this step";
+      playOne.addEventListener("click", () => playSingle(i));
+      const del = document.createElement("button");
+      del.className = "sm danger";
+      del.textContent = "×";
+      del.title = "Delete step";
+      del.addEventListener("click", () => {
+        steps.splice(i, 1);
+        syncExport();
+        renderSteps();
+      });
+      actions.append(up, down, playOne, del);
+      row.appendChild(actions);
+
+      stepsEl.appendChild(row);
+    });
+  }
+
+  function numField(label, value, onChange) {
+    const g = document.createElement("div");
+    g.className = "field-group";
+    const span = document.createElement("span");
+    span.textContent = label;
+    g.appendChild(span);
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.value = hexByte(value);
+    inp.style.width = "64px";
+    inp.addEventListener("change", () => {
+      const v = parseHex(inp.value);
+      inp.value = hexByte(v);
+      onChange(v);
+    });
+    g.appendChild(inp);
+    return g;
+  }
+
+  function playSingle(i) {
+    stopPlayback();
+    const st = steps[i];
+    if (!st) return;
+    const ctx = ensureAudio();
+    const master = ctx.createGain();
+    master.gain.value = (masterVolEl.value | 0) / 100;
+    master.connect(ctx.destination);
+    activeNodes.push(master);
+    const sec = Math.max(1, st.dur | 0) * FRAME;
+    playStepAudio(ctx, st, ctx.currentTime + 0.02, sec, master);
+    playingIndex = i;
+    renderSteps();
+    playTimer = setTimeout(() => {
+      playingIndex = -1;
+      renderSteps();
+      playTimer = null;
+    }, sec * 1000 + 40);
+    setStatus("Playing step " + i, "ok");
+  }
+
+  // Presets UI
+  const presetsEl = document.getElementById("presets");
+  Object.keys(PRESETS).forEach((name) => {
+    const b = document.createElement("button");
+    b.className = "sm";
+    b.textContent = name;
+    b.addEventListener("click", () => {
+      stopPlayback();
+      steps = cloneSteps(PRESETS[name]);
+      labelEl.value = name;
+      syncExport();
+      renderSteps();
+      setStatus("Loaded " + name, "ok");
+    });
+    presetsEl.appendChild(b);
+  });
+
+  document.getElementById("btnPlay").addEventListener("click", playAll);
+  document.getElementById("btnStop").addEventListener("click", () => {
+    stopPlayback();
+    setStatus("Stopped", "ok");
+  });
+  document.getElementById("btnAdd").addEventListener("click", () => {
+    steps.push({ type: 0, a: 0x9c, b: 0x80, c: 0x08, dur: 4 });
+    syncExport();
+    renderSteps();
+    setStatus("Added step", "ok");
+  });
+
+  document.getElementById("btnImport").addEventListener("click", () => {
+    try {
+      stopPlayback();
+      const n = parseImport(bytesEl.value);
+      syncExport();
+      renderSteps();
+      setStatus("Imported " + n + " steps", "ok");
+    } catch (err) {
+      setStatus(String(err.message || err), "err");
+    }
+  });
+
+  document.getElementById("btnCopy").addEventListener("click", async () => {
+    syncExport();
+    try {
+      await navigator.clipboard.writeText(bytesEl.value);
+      setStatus("Copied to clipboard", "ok");
+    } catch {
+      bytesEl.select();
+      document.execCommand("copy");
+      setStatus("Copied (fallback)", "ok");
+    }
+  });
+
+  labelEl.addEventListener("change", syncExport);
+
+  // Sidebar
+  const mainEl = document.getElementById("main");
+  const btnSidebar = document.getElementById("btnSidebar");
+  function setSidebarCollapsed(collapsed) {
+    mainEl.classList.toggle("sidebar-collapsed", collapsed);
+    btnSidebar.textContent = collapsed ? "Show bytes" : "Hide bytes";
+    try {
+      localStorage.setItem("nes-sfx-editor-sidebar", collapsed ? "1" : "0");
+    } catch (_) {}
+  }
+  btnSidebar.addEventListener("click", () => {
+    setSidebarCollapsed(!mainEl.classList.contains("sidebar-collapsed"));
+  });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "]" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const t = e.target;
+      if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.tagName === "SELECT"))
+        return;
+      e.preventDefault();
+      setSidebarCollapsed(!mainEl.classList.contains("sidebar-collapsed"));
+    }
+    if (e.key === " " && !e.metaKey && !e.ctrlKey) {
+      const t = e.target;
+      if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.tagName === "SELECT"))
+        return;
+      e.preventDefault();
+      playAll();
+    }
+  });
+  try {
+    if (localStorage.getItem("nes-sfx-editor-sidebar") === "1") {
+      setSidebarCollapsed(true);
+    }
+  } catch (_) {}
+
+  // Init
+  syncExport();
+  renderSteps();
+  setStatus("Ready — load a preset, edit steps, Play / Copy", "ok");
+})();
+</script>
+</body>
+</html>

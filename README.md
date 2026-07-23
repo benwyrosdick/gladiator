@@ -57,6 +57,8 @@ SFX: jump, pickup, drop, win jingle, timeout rumble (pulse + noise via the APU).
 src/main.s              Game code, tiles, level, states
 nrom128.cfg             Linker config
 Makefile                Build → build/vesyl_shipper.nes
+tools/nes-tile-editor.html   CHR + palette editor
+tools/nes-sfx-editor.html    SFX step editor (pulse/noise → ca65)
 nes_assembly_guide.md   NES / 6502 reference
 CLAUDE.md               Notes for AI coding agents
 ```
