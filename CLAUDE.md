@@ -80,6 +80,14 @@ Y-off, X-off, tile, attr; terminator `$80`. Drawn at `player_y` / `screen_x`.
 - Prefer `make clean && make` after large edits
 - iNES header must keep **vertical mirroring** (`flags6` bit 0 = 1) for dual-nametable horizontal scroll
 
+## Sound
+
+- APU init: `init_apu` (pulse1 + noise)
+- Queue: `lda #SFX_*; jsr play_sfx`
+- Per frame: `update_sfx` from main loop
+- Sequences in RODATA (`sfx_jump`, `sfx_pickup`, …) via `sfx_table`
+- IDs: `SFX_JUMP` `SFX_PICKUP` `SFX_DROP` `SFX_WIN` `SFX_TIMEOUT`
+
 ## Out of scope (v1)
 
-Enemies, sound, multi-level, vertical scroll, mapper upgrades.
+Multi-level, vertical scroll, mapper upgrades, full music engine.

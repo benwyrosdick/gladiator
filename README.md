@@ -49,6 +49,8 @@ make clean
 3. Exit the warehouse door and reach the truck while carrying → **DELIVERED!**
 4. If the clock hits **00**, the camera pans to the exit, the truck pulls away → **TIME UP!**
 
+SFX: jump, pickup, drop, win jingle, timeout rumble (pulse + noise via the APU).
+
 ## Layout
 
 ```

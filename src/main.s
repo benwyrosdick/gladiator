@@ -17,6 +17,25 @@ PPUADDR   = $2006
 PPUDATA   = $2007
 OAMDMA    = $4014
 
+; APU
+APU_PULSE1_VOL   = $4000
+APU_PULSE1_SWEEP = $4001
+APU_PULSE1_LO    = $4002
+APU_PULSE1_HI    = $4003
+APU_NOISE_VOL    = $400C
+APU_NOISE_LO     = $400E
+APU_NOISE_HI     = $400F
+APU_STATUS       = $4015
+APU_FRAME        = $4017
+
+; SFX ids (0 = none)
+SFX_NONE     = 0
+SFX_JUMP     = 1
+SFX_PICKUP   = 2
+SFX_DROP     = 3
+SFX_WIN      = 4
+SFX_TIMEOUT  = 5
+
 ; Game states
 STATE_TITLE    = 0
 STATE_PLAY     = 1
@@ -166,6 +185,11 @@ metasprite_ptr_hi: .res 1
 oam_idx:           .res 1
 str_nt_hi:         .res 1
 str_nt_lo:         .res 1
+sfx_queue:         .res 1   ; pending SFX id (0 = none)
+sfx_timer:         .res 1   ; frames left in current step
+sfx_pos:           .res 1   ; byte index into current SFX sequence
+sfx_ptr_lo:        .res 1
+sfx_ptr_hi:        .res 1
 
 ; -------------------------
 ; BSS — OAM must be at $0200
@@ -451,6 +475,50 @@ PAUSE_LEN = 6
 PAUSE_X0  = 104             ; (256 - 6*8) / 2
 PAUSE_Y   = 112
 
+; SFX sequences: steps of 5 bytes, then $FF
+; type 0 = pulse1: vol ($4000), period_lo, $4003, duration
+; type 1 = noise:  vol ($400C), period ($400E), $400F, duration
+; $FF = end (silence channels)
+sfx_table:
+	.word 0                 ; SFX_NONE
+	.word sfx_jump
+	.word sfx_pickup
+	.word sfx_drop
+	.word sfx_win
+	.word sfx_timeout
+
+sfx_jump:
+	.byte 0, $9C, $A8, $08, 3
+	.byte 0, $9C, $80, $08, 3
+	.byte 0, $98, $60, $08, 4
+	.byte $FF
+
+sfx_pickup:
+	.byte 0, $9A, $90, $08, 4
+	.byte 0, $9C, $60, $08, 5
+	.byte 0, $9E, $40, $08, 6
+	.byte $FF
+
+sfx_drop:
+	.byte 0, $98, $C0, $08, 4
+	.byte 0, $94, $E8, $08, 5
+	.byte 1, $3A, $0D, $08, 4   ; soft noise thump
+	.byte $FF
+
+sfx_win:
+	.byte 0, $9E, $A0, $08, 5
+	.byte 0, $9E, $80, $08, 5
+	.byte 0, $9E, $60, $08, 6
+	.byte 0, $9F, $40, $08, 10
+	.byte $FF
+
+sfx_timeout:
+	.byte 1, $3C, $0A, $18, 6
+	.byte 1, $38, $0C, $18, 8
+	.byte 0, $96, $F0, $28, 10
+	.byte 0, $92, $F8, $28, 12
+	.byte $FF
+
 ; -------------------------
 ; CODE
 ; -------------------------
@@ -485,6 +553,7 @@ reset:
 
 	jsr load_palettes
 	jsr load_chr
+	jsr init_apu
 
 	lda #%10000000
 	sta ppuctrl_nt
@@ -515,25 +584,27 @@ main_loop:
 	beq @timeout
 	cmp #STATE_FAIL
 	beq @fail
-	jmp main_loop
+	jmp @sfx
 
 @title:
 	jsr update_title
-	jmp main_loop
+	jmp @sfx
 @play:
 	jsr update_play
-	jmp main_loop
+	jmp @sfx
 @pause:
 	jsr update_pause
-	jmp main_loop
+	jmp @sfx
 @win:
 	jsr update_win
-	jmp main_loop
+	jmp @sfx
 @timeout:
 	jsr update_timeout
-	jmp main_loop
+	jmp @sfx
 @fail:
 	jsr update_fail
+@sfx:
+	jsr update_sfx
 	jmp main_loop
 
 ; -------------------------
@@ -1248,6 +1319,8 @@ apply_jump:
 	lda #0
 	sta on_ground
 	sta player_y_sub
+	lda #SFX_JUMP
+	jsr play_sfx
 @done:
 	rts
 
@@ -1591,6 +1664,8 @@ try_pickup_package:
 @yes:
 	lda #1
 	sta has_package
+	lda #SFX_PICKUP
+	jsr play_sfx
 @no:
 	rts
 
@@ -1661,6 +1736,8 @@ drop_package:
 @clear:
 	lda #0
 	sta has_package
+	lda #SFX_DROP
+	jsr play_sfx
 	rts
 
 ; Free package: horizontal coast/throw + gravity + land
@@ -1987,6 +2064,8 @@ check_truck:
 	bcc @done
 	cmp #TRUCK_RIGHT_L               ; past truck right (480)
 	bcs @done
+	lda #SFX_WIN
+	jsr play_sfx
 	jsr enter_win
 @done:
 	rts
@@ -2004,6 +2083,8 @@ update_timer:
 	dec timer_sec
 	bne @done
 @to:
+	lda #SFX_TIMEOUT
+	jsr play_sfx
 	jmp enter_timeout
 @done:
 	rts
@@ -3047,6 +3128,115 @@ read_controller:
 	eor #$FF
 	and pad1
 	sta pad1_edge
+	rts
+
+; -------------------------
+; Sound (pulse1 + noise SFX)
+; -------------------------
+init_apu:
+	lda #$40
+	sta APU_FRAME             ; 4-step sequence, disable frame IRQ
+	lda #0
+	sta APU_STATUS            ; silence all
+	; zero pulse/noise regs
+	sta APU_PULSE1_VOL
+	sta APU_PULSE1_SWEEP
+	sta APU_PULSE1_LO
+	sta APU_PULSE1_HI
+	sta APU_NOISE_VOL
+	sta APU_NOISE_LO
+	sta APU_NOISE_HI
+	lda #%00001001            ; enable pulse1 + noise
+	sta APU_STATUS
+	lda #0
+	sta sfx_queue
+	sta sfx_timer
+	sta sfx_pos
+	rts
+
+; A = SFX_* id — queues (interrupts current on next update_sfx)
+play_sfx:
+	sta sfx_queue
+	rts
+
+update_sfx:
+	lda sfx_queue
+	beq @tick
+	; start new sequence
+	asl a
+	tax
+	lda sfx_table, x
+	sta sfx_ptr_lo
+	lda sfx_table+1, x
+	sta sfx_ptr_hi
+	lda #0
+	sta sfx_queue
+	sta sfx_pos
+	sta sfx_timer
+	jsr sfx_load_step
+	rts
+@tick:
+	lda sfx_timer
+	beq @done
+	dec sfx_timer
+	bne @done
+	jsr sfx_load_step
+@done:
+	rts
+
+; Load next step from (sfx_ptr) at sfx_pos. $FF ends and silences.
+sfx_load_step:
+	lda sfx_ptr_hi
+	ora sfx_ptr_lo
+	beq @silence              ; no active sequence
+	ldy sfx_pos
+	lda (sfx_ptr_lo), y
+	cmp #$FF
+	beq @silence
+	cmp #0
+	bne @noise
+	; pulse1 step
+	iny
+	lda (sfx_ptr_lo), y
+	sta APU_PULSE1_VOL
+	lda #0
+	sta APU_PULSE1_SWEEP
+	iny
+	lda (sfx_ptr_lo), y
+	sta APU_PULSE1_LO
+	iny
+	lda (sfx_ptr_lo), y
+	sta APU_PULSE1_HI
+	iny
+	lda (sfx_ptr_lo), y
+	sta sfx_timer
+	iny
+	sty sfx_pos
+	rts
+@noise:
+	iny
+	lda (sfx_ptr_lo), y
+	sta APU_NOISE_VOL
+	iny
+	lda (sfx_ptr_lo), y
+	sta APU_NOISE_LO
+	iny
+	lda (sfx_ptr_lo), y
+	sta APU_NOISE_HI
+	iny
+	lda (sfx_ptr_lo), y
+	sta sfx_timer
+	iny
+	sty sfx_pos
+	rts
+@silence:
+	lda #$30                  ; const vol 0
+	sta APU_PULSE1_VOL
+	sta APU_NOISE_VOL
+	lda #0
+	sta sfx_timer
+	sta sfx_ptr_lo
+	sta sfx_ptr_hi
 	rts
 
 nmi:
