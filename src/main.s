@@ -136,6 +136,7 @@ FORKLIFT_MAX_L  = $80       ; 384 = 256+128; stop before exit door
 FORKLIFT_MAX_H  = $01
 FORKLIFT_KNOCK  = 24        ; package shoved this far past forklift
 FORKLIFT_COOL   = 40        ; frames between knocks
+FORKLIFT_TURN_D = 24        ; px between random turn rolls
 
 ; Level timer (NTSC)
 TIMER_SEC_INIT = 25
@@ -206,6 +207,8 @@ forklift_x_lo:     .res 1
 forklift_x_hi:     .res 1
 forklift_dir:      .res 1   ; 0=right, 1=left
 forklift_cool:     .res 1   ; knock cooldown
+forklift_dist:     .res 1   ; px traveled toward next random turn roll
+rng:               .res 1   ; 8-bit LFSR seed (must be non-zero)
 
 ; -------------------------
 ; BSS — OAM must be at $0200
@@ -830,6 +833,13 @@ enter_play:
 	sta forklift_x_hi
 	sta forklift_dir
 	sta forklift_cool
+	sta forklift_dist
+	; Keep RNG non-zero (RAM clear leaves it 0 on first play)
+	lda rng
+	bne @rng_ok
+	lda #$A5
+	sta rng
+@rng_ok:
 	lda #%10000000
 	sta ppuctrl_nt
 
@@ -3090,16 +3100,18 @@ update_forklift:
 	sta forklift_x_hi
 	; hit max?
 	cmp #FORKLIFT_MAX_H
-	bcc @collide
+	bcc @maybe_rand
 	lda forklift_x_lo
 	cmp #FORKLIFT_MAX_L
-	bcc @collide
+	bcc @maybe_rand
 	lda #FORKLIFT_MAX_L
 	sta forklift_x_lo
 	lda #FORKLIFT_MAX_H
 	sta forklift_x_hi
 	lda #1
 	sta forklift_dir
+	lda #0
+	sta forklift_dist
 	jmp @collide
 @go_left:
 	lda forklift_x_lo
@@ -3110,14 +3122,32 @@ update_forklift:
 	sbc #0
 	sta forklift_x_hi
 	; hit min? (hi must be 0 and lo < MIN)
-	bne @collide
+	bne @maybe_rand
 	lda forklift_x_lo
 	cmp #FORKLIFT_MIN_X
-	bcs @collide
+	bcs @maybe_rand
 	lda #FORKLIFT_MIN_X
 	sta forklift_x_lo
 	lda #0
 	sta forklift_x_hi
+	sta forklift_dir
+	sta forklift_dist
+	jmp @collide
+@maybe_rand:
+	; every FORKLIFT_TURN_D px: 25% chance to reverse
+	lda forklift_dist
+	clc
+	adc #FORKLIFT_SPD
+	sta forklift_dist
+	cmp #FORKLIFT_TURN_D
+	bcc @collide
+	lda #0
+	sta forklift_dist
+	jsr rand8
+	and #$03                ; 0..3 → 25% when zero
+	bne @collide
+	lda forklift_dir
+	eor #1
 	sta forklift_dir
 @collide:
 	; skip if cooldown
@@ -3126,6 +3156,20 @@ update_forklift:
 	jsr forklift_hit_player
 @done:
 	rts
+
+; 8-bit Galois LFSR; returns next value in A (and rng)
+rand8:
+	lda rng
+	beq @reseed             ; never stay stuck at 0
+	asl
+	bcc @store
+	eor #$1D
+@store:
+	sta rng
+	rts
+@reseed:
+	lda #$A5
+	bne @store              ; always branch
 
 ; AABB player vs forklift; if overlap and carrying, knock package away
 forklift_hit_player:
