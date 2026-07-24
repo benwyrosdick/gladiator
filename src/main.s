@@ -3309,7 +3309,11 @@ draw_forklift:
 	sta temp
 	lda forklift_x_hi
 	sbc scroll_hi
-	bne @off                ; not on this screen (result hi != 0)
+	bne @off                ; left of camera or ≥256 px right
+	; NES sprite X is 8-bit and wraps: hide if any tile would cross 256
+	lda temp
+	cmp #256 - FORKLIFT_W   ; 240
+	bcs @off
 	lda #FORKLIFT_Y
 	sta temp2
 	lda forklift_dir
