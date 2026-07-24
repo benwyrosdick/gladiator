@@ -228,9 +228,13 @@ oam_shadow: .res 256
 	.segment "RODATA"
 
 tiles:
-; sky (empty)
+; empty
 sky_tile:
-	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+	.byte $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00  ; 0
+
+; sky
+warehouse_tile:
+	.byte $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$00,$00,$00,$00,$00,$00,$00,$00  ; 0
 
 ; player (original gladiator art)
 player_s_0_idle:
@@ -250,8 +254,8 @@ player_s_3_walk:
 ; Same bits in both planes → palette index 3 (bright).
 
 ground_top_tile:
-	.byte $FF,$FF,$FF,$55,$AA,$55,$AA,$55,$00,$00,$FF,$AA,$55,$AA,$55,$AA  ; 0
-	
+	.byte $00,$00,$FF,$55,$AA,$55,$AA,$55,$FF,$FF,$FF,$AA,$55,$AA,$55,$AA  ; 0
+
 ground_fill_tile:
 	.byte $AA,$55,$AA,$55,$AA,$55,$AA,$55,$55,$AA,$55,$AA,$55,$AA,$55,$AA  ; 0
 
@@ -260,7 +264,7 @@ brick_tile:
 
 ; platform — full 8x8 solid ledge (white top, blue body; always visible on black sky)
 platform_tile:
-	.byte $FF,$FF,$EE,$DD,$BB,$77,$EE,$DD,$00,$00,$FF,$FF,$FF,$FF,$FF,$FF  ; 0
+	.byte $00,$00,$EE,$DD,$BB,$77,$EE,$00,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF  ; 0
 
 ; package 12x12 (TL/TR/BL/BR). 0=clear 1=white label 2=cardboard 3=outline
 ; Label is 4x6 at (2,2) inside the box
@@ -396,6 +400,7 @@ tiles_end:
 ; Tile indices from CHR labels (16 bytes per tile). Insert/reorder tiles freely;
 ; these stay correct as long as the labels mark the first tile of each set.
 T_SKY              = (sky_tile - tiles) / 16
+T_WAREHOUSE        = (warehouse_tile - tiles) / 16
 T_PLAYER_S_0_IDLE  = (player_s_0_idle - tiles) / 16
 T_PLAYER_S_1_IDLE  = (player_s_1_idle - tiles) / 16
 T_PLAYER_S_2_IDLE  = (player_s_2_idle - tiles) / 16
@@ -488,13 +493,13 @@ forklift_metasprite_flip:
 
 ; Palettes
 bg_palette:
-	.byte $0F, $21, $11, $30   ; sky / white text
+	.byte $0F, $21, $11, $30   ; 0=black 1=light blue (warehouse) 2=dark blue 3=white
 	.byte $0F, $37, $27, $16   ; package: light card, body, red tape
 	.byte $0F, $00, $10, $20   ; asphalt gray
 	.byte $0F, $28, $16, $07   ; truck: yellow, red, dark brown (not color0 — visible on black)
 
 spr_palette:
-	.byte $0F, $27, $17, $30   ; player
+	.byte $0F, $1D, $17, $30   ; player
 	.byte $0F, $30, $27, $16   ; package: white label, cardboard, red outline
 	.byte $0F, $38, $2D, $1D   ; forklift
 	.byte $0F, $28, $16, $07   ; spare / truck match
@@ -2806,6 +2811,48 @@ draw_warehouse:
 	; Expanded warehouse: ceiling across NT0 + NT1 cols 0-17 (to exit at world 400),
 	; left wall, exit pillar NT1 cols 18-19, interior shelves. Truck drawn outside door.
 	bit PPUSTATUS
+
+	; Interior air (rows 6-21): warehouse_tile. Walls/shelves/platforms overwrite.
+	; NT0 full width; NT1 only through exit (cols 0-17). Outside stays T_SKY (black).
+	ldx #6
+@wh_fill0:
+	jsr pp_row_nt0
+	ldy #32
+	lda #T_WAREHOUSE
+@wh_f0c:
+	sta PPUDATA
+	dey
+	bne @wh_f0c
+	inx
+	cpx #22
+	bcc @wh_fill0
+
+	ldx #6
+@wh_fill1:
+	stx temp
+	lda #0
+	sta temp_hi
+	ldy #5
+@wh_f1s:
+	asl temp
+	rol temp_hi
+	dey
+	bne @wh_f1s
+	lda temp_hi
+	clc
+	adc #$24
+	sta PPUADDR
+	lda temp
+	sta PPUADDR
+	ldy #18
+	lda #T_WAREHOUSE
+@wh_f1c:
+	sta PPUDATA
+	dey
+	bne @wh_f1c
+	inx
+	cpx #22
+	bcc @wh_fill1
 
 	; Ceiling row 5 full NT0
 	lda #$20
