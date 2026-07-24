@@ -198,7 +198,8 @@
     max-width: 420px;
     width: auto;
   }
-  .step .note-row {
+  .step .note-row,
+  .step .sweep-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -206,8 +207,27 @@
     flex: 1 1 100%;
     width: 100%;
   }
-  .step .note-row select {
+  .step .note-row select,
+  .step .sweep-row select {
     min-width: 64px;
+  }
+  .step .sweep-row label.check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .step .sweep-row input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 14px;
+    height: 14px;
+  }
+  .step .sweep-hex {
+    color: var(--muted);
+    font-size: 11px;
+    min-width: 72px;
   }
   .step .actions {
     display: flex;
@@ -287,9 +307,9 @@
 
     <p class="panel-title" style="margin-top:16px">Steps</p>
     <p class="hint-sm">
-      Type <strong>0</strong> = pulse1: vol, <strong>sweep</strong> ($4001), period_lo, $4003, duration&nbsp;&nbsp;·&nbsp;&nbsp;
+      Type <strong>0</strong> = pulse1: vol, sweep ($4001), period_lo, $4003, duration&nbsp;&nbsp;·&nbsp;&nbsp;
       Type <strong>1</strong> = noise: vol, period, $400F, duration.
-      Sweep bit7=enable, bits6–4=rate, bit3=negate (1≈pitch up), bits2–0=shift.
+      Use <strong>Sweep</strong> controls for smooth glides (hardware $4001).
     </p>
     <div class="steps" id="steps"></div>
   </section>
@@ -324,7 +344,7 @@
   /** Default library from VESYL main.s (pulse includes sweep) */
   const PRESETS = {
     sfx_jump: [
-      { type: 0, a: 0x98, sweep: 0x9b, b: 0x10, c: 0x0e, dur: 14 },
+      { type: 0, a: 0x98, sweep: 0x9b, b: 0x78, c: 0x0d, dur: 12 },
     ],
     sfx_pickup: [
       { type: 0, a: 0x9a, sweep: 0x00, b: 0x90, c: 0x08, dur: 4 },
@@ -337,13 +357,13 @@
       { type: 1, a: 0x3a, sweep: 0, b: 0x0d, c: 0x08, dur: 4 },
     ],
     sfx_win: [
-      { type: 0, a: 0x9c, sweep: 0x00, b: 0xab, c: 0x09, dur: 16 },
-      { type: 0, a: 0x9c, sweep: 0x00, b: 0xab, c: 0x09, dur: 16 },
-      { type: 0, a: 0x98, sweep: 0x00, b: 0x7c, c: 0x09, dur: 16 },
-      { type: 0, a: 0x9c, sweep: 0x00, b: 0x52, c: 0x09, dur: 16 },
-      { type: 0, a: 0x9c, sweep: 0x00, b: 0xab, c: 0x09, dur: 16 },
-      { type: 0, a: 0x9c, sweep: 0x00, b: 0x52, c: 0x09, dur: 16 },
-      { type: 0, a: 0x9c, sweep: 0x00, b: 0x7c, c: 0x09, dur: 32 },
+      { type: 0, a: 0x9c, sweep: 0x00, b: 0xab, c: 0x09, dur: 12 },
+      { type: 0, a: 0x9c, sweep: 0x00, b: 0xab, c: 0x09, dur: 12 },
+      { type: 0, a: 0x98, sweep: 0x00, b: 0x7c, c: 0x09, dur: 12 },
+      { type: 0, a: 0x9c, sweep: 0x00, b: 0x52, c: 0x09, dur: 12 },
+      { type: 0, a: 0x9c, sweep: 0x00, b: 0xab, c: 0x09, dur: 12 },
+      { type: 0, a: 0x9c, sweep: 0x00, b: 0x52, c: 0x09, dur: 12 },
+      { type: 0, a: 0x9c, sweep: 0x00, b: 0x7c, c: 0x09, dur: 24 },
     ],
     sfx_timeout: [
       { type: 1, a: 0x3c, sweep: 0, b: 0x0a, c: 0x18, dur: 6 },
@@ -516,6 +536,56 @@
     { v: 2, label: "50%" },
     { v: 3, label: "25% neg" },
   ];
+
+  /** $4001 EPPP NSSS */
+  function unpackSweep(sw) {
+    sw = sw || 0;
+    return {
+      enable: (sw & 0x80) !== 0,
+      rate: (sw >> 4) & 7,
+      negate: (sw & 0x08) !== 0,
+      shift: sw & 7,
+    };
+  }
+
+  function packSweep(enable, rate, negate, shift) {
+    return (
+      (enable ? 0x80 : 0) |
+      ((rate & 7) << 4) |
+      (negate ? 0x08 : 0) |
+      (shift & 7)
+    );
+  }
+
+  /**
+   * Simulate NES pulse1 sweep for `frames` game frames.
+   * Hardware: shift 0 → change amount is 0 (no pitch update).
+   * Pulse1 negate uses ones'-complement style (subtract (period>>shift)+1).
+   * Sweep unit clocks at ~120 Hz; divider = rate+1.
+   */
+  function simulateSweepPeriod(startPeriod, sweep, frames) {
+    let t = startPeriod & 0x7ff;
+    const sw = sweep || 0;
+    if ((sw & 0x80) === 0) return t;
+    const shift = sw & 7;
+    if (shift === 0) return t; // hardware: no change when shift is 0
+    const negate = (sw & 0x08) !== 0;
+    const div = ((sw >> 4) & 7) + 1;
+    // ~2 sweep clocks per 60Hz frame
+    const clocks = Math.floor((frames * 2) / div);
+    for (let k = 0; k < clocks; k++) {
+      const delta = t >> shift;
+      if (negate) {
+        // pulse1: ones' complement add ≈ subtract (delta+1)
+        t = t - delta - 1;
+      } else {
+        t = t + delta;
+      }
+      if (t < 8 || t > 0x7ff) break; // mute/channel invalid range
+      t = Math.max(0, Math.min(0x7ff, t));
+    }
+    return Math.max(8, Math.min(0x7ff, t));
+  }
 
   function volLevel(vol) {
     // constant volume mode: low nibble; bit 4 = constant
@@ -700,25 +770,39 @@
     if (step.type === 0) {
       const osc = ctx.createOscillator();
       osc.type = "square";
+      const startT = pulsePeriod(step.b, step.c);
       const startHz = Math.max(20, pulseHz(step.b, step.c) || 20);
       osc.frequency.setValueAtTime(startHz, when);
-      // Approximate hardware sweep as a continuous glide for preview
+      // Approximate hardware sweep (respects rate + shift=0 = no change)
       const sw = step.sweep || 0;
-      if (sw & 0x80) {
-        let t = pulsePeriod(step.b, step.c);
+      if ((sw & 0x80) !== 0 && (sw & 7) !== 0) {
+        const frames = Math.max(1, step.dur | 0);
+        const endT = simulateSweepPeriod(startT, sw, frames);
+        const endHz = Math.max(20, CPU / (16 * (endT + 1)));
+        // Multi-point ramp so rate (tick spacing) is audible in preview
+        const div = ((sw >> 4) & 7) + 1;
+        const nTicks = Math.max(1, Math.floor((frames * 2) / div));
+        let t = startT;
         const shift = sw & 7;
         const negate = (sw & 0x08) !== 0;
-        const rate = ((sw >> 4) & 7) + 1;
-        // Sweep clocks ~120 Hz; game frames 60 Hz → ~2 clocks per frame
-        const clocks = Math.max(1, Math.floor((step.dur * 2) / rate));
-        for (let k = 0; k < clocks; k++) {
+        for (let k = 1; k <= nTicks; k++) {
           const delta = t >> shift;
           if (negate) t = Math.max(8, t - delta - 1);
-          else t = Math.min(2047, t + delta);
+          else t = Math.min(0x7ff, t + delta);
+          const hz = Math.max(20, CPU / (16 * (t + 1)));
+          const u = when + (k / nTicks) * durationSec;
+          try {
+            osc.frequency.exponentialRampToValueAtTime(hz, u);
+          } catch (_) {
+            osc.frequency.linearRampToValueAtTime(hz, u);
+          }
         }
-        const endHz = Math.max(20, CPU / (16 * (t + 1)));
+        // ensure we land on final
         try {
-          osc.frequency.exponentialRampToValueAtTime(endHz, when + durationSec);
+          osc.frequency.exponentialRampToValueAtTime(
+            endHz,
+            when + durationSec
+          );
         } catch (_) {
           osc.frequency.linearRampToValueAtTime(endHz, when + durationSec);
         }
@@ -858,14 +942,6 @@
         });
         dutyG.appendChild(dutySel);
         fields.appendChild(dutyG);
-
-        // Hardware pitch sweep $4001
-        fields.appendChild(
-          numField("Sweep $4001", st.sweep, (v) => {
-            st.sweep = v;
-            syncExport();
-          })
-        );
       }
 
       // b / c — period fields (updated by pitch slider)
@@ -1039,6 +1115,190 @@
       fields.appendChild(freq);
       fields.appendChild(pitchRow);
       fields.appendChild(noteRow);
+
+      // Sweep controls (pulse only) — $4001 EPPP NSSS
+      if (st.type === 0) {
+        if (st.sweep === undefined) st.sweep = 0;
+        const sw = unpackSweep(st.sweep);
+        const sweepRow = document.createElement("div");
+        sweepRow.className = "sweep-row";
+
+        const sweepLab = document.createElement("span");
+        sweepLab.className = "panel-title";
+        sweepLab.style.margin = "0";
+        sweepLab.textContent = "Sweep";
+        sweepRow.appendChild(sweepLab);
+
+        const hexOut = document.createElement("span");
+        hexOut.className = "sweep-hex";
+        hexOut.title = "$4001 value";
+
+        function commitSweep(parts) {
+          st.sweep = packSweep(
+            parts.enable,
+            parts.rate,
+            parts.negate,
+            parts.shift
+          );
+          hexOut.textContent = hexByte(st.sweep);
+          syncExport();
+        }
+
+        const enLab = document.createElement("label");
+        enLab.className = "check";
+        const enChk = document.createElement("input");
+        enChk.type = "checkbox";
+        enChk.checked = sw.enable;
+        enLab.appendChild(enChk);
+        enLab.appendChild(document.createTextNode("Enable"));
+        sweepRow.appendChild(enLab);
+
+        const dirG = document.createElement("div");
+        dirG.className = "field-group";
+        dirG.innerHTML = "<span>Direction</span>";
+        const dirSel = document.createElement("select");
+        dirSel.innerHTML =
+          '<option value="1">Pitch up (negate)</option>' +
+          '<option value="0">Pitch down</option>';
+        dirSel.value = sw.negate ? "1" : "0";
+        dirSel.disabled = !sw.enable;
+        dirG.appendChild(dirSel);
+        sweepRow.appendChild(dirG);
+
+        const rateG = document.createElement("div");
+        rateG.className = "field-group";
+        rateG.innerHTML = "<span>Rate (how often)</span>";
+        const rateSel = document.createElement("select");
+        rateSel.title =
+          "How often pitch updates. 0 = every sweep clock (fastest/wildest). 7 = slowest.";
+        const rateLabels = [
+          "0 — fastest (wild)",
+          "1 — fast",
+          "2",
+          "3 — medium",
+          "4",
+          "5",
+          "6",
+          "7 — slowest",
+        ];
+        for (let r = 0; r <= 7; r++) {
+          const o = document.createElement("option");
+          o.value = String(r);
+          o.textContent = rateLabels[r];
+          rateSel.appendChild(o);
+        }
+        rateSel.value = String(sw.rate);
+        rateSel.disabled = !sw.enable;
+        rateG.appendChild(rateSel);
+        sweepRow.appendChild(rateG);
+
+        const shiftG = document.createElement("div");
+        shiftG.className = "field-group";
+        shiftG.innerHTML = "<span>Shift (how far)</span>";
+        const shiftSel = document.createElement("select");
+        shiftSel.title =
+          "Size of each pitch jump: Δ = period >> shift. 0 = no change. 1 = huge, 7 = tiny.";
+        const shiftLabels = [
+          "0 — off (no change)",
+          "1 — huge steps",
+          "2 — large",
+          "3 — medium (boing)",
+          "4 — moderate",
+          "5 — small",
+          "6 — tiny",
+          "7 — very tiny",
+        ];
+        for (let s = 0; s <= 7; s++) {
+          const o = document.createElement("option");
+          o.value = String(s);
+          o.textContent = shiftLabels[s];
+          shiftSel.appendChild(o);
+        }
+        shiftSel.value = String(sw.shift);
+        shiftSel.disabled = !sw.enable;
+        shiftG.appendChild(shiftSel);
+        sweepRow.appendChild(shiftG);
+
+        hexOut.textContent = hexByte(st.sweep);
+        sweepRow.appendChild(hexOut);
+
+        const tip = document.createElement("span");
+        tip.className = "hint-sm";
+        tip.style.flex = "1 1 100%";
+        tip.textContent =
+          "Rate 0 = wildest (updates most often). Use rate 3–7 and/or shift 4–7 for gentler glides. Shift 0 disables pitch change.";
+        sweepRow.appendChild(tip);
+
+        function readParts() {
+          return {
+            enable: enChk.checked,
+            rate: +rateSel.value,
+            negate: dirSel.value === "1",
+            shift: +shiftSel.value,
+          };
+        }
+
+        function onSweepChange() {
+          const p = readParts();
+          dirSel.disabled = !p.enable;
+          rateSel.disabled = !p.enable;
+          shiftSel.disabled = !p.enable;
+          // Sensible defaults when first enabling
+          if (p.enable && (st.sweep & 0x80) === 0) {
+            if (p.shift === 0) {
+              shiftSel.value = "3";
+              p.shift = 3;
+            }
+            if (!p.negate && dirSel.value === "0") {
+              // keep user choice
+            }
+          }
+          commitSweep(p);
+        }
+
+        enChk.addEventListener("change", onSweepChange);
+        dirSel.addEventListener("change", onSweepChange);
+        rateSel.addEventListener("change", onSweepChange);
+        shiftSel.addEventListener("change", onSweepChange);
+
+        // Quick presets
+        const presetBoing = document.createElement("button");
+        presetBoing.type = "button";
+        presetBoing.className = "sm";
+        presetBoing.textContent = "Boing↑";
+        presetBoing.title = "Enable rising sweep ($9B)";
+        presetBoing.addEventListener("click", () => {
+          st.sweep = 0x9b;
+          enChk.checked = true;
+          dirSel.value = "1";
+          rateSel.value = "1";
+          shiftSel.value = "3";
+          dirSel.disabled = false;
+          rateSel.disabled = false;
+          shiftSel.disabled = false;
+          hexOut.textContent = hexByte(st.sweep);
+          syncExport();
+        });
+        sweepRow.appendChild(presetBoing);
+
+        const presetOff = document.createElement("button");
+        presetOff.type = "button";
+        presetOff.className = "sm";
+        presetOff.textContent = "Off";
+        presetOff.addEventListener("click", () => {
+          st.sweep = 0;
+          enChk.checked = false;
+          dirSel.disabled = true;
+          rateSel.disabled = true;
+          shiftSel.disabled = true;
+          hexOut.textContent = "$00";
+          syncExport();
+        });
+        sweepRow.appendChild(presetOff);
+
+        fields.appendChild(sweepRow);
+      }
+
       row.appendChild(fields);
 
       const actions = document.createElement("div");

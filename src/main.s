@@ -490,7 +490,7 @@ sfx_table:
 
 ; Smooth rising boing via hardware sweep (continuous glide, not stepped notes)
 sfx_jump:
-	.byte 0, $98, $9B, $10, $0E, 14
+	.byte 0, $98, $9B, $78, $0D, 12
 	.byte $FF
 
 sfx_pickup:
@@ -506,13 +506,13 @@ sfx_drop:
 	.byte $FF
 
 sfx_win:
-	.byte 0, $9C, $00, $AB, $09, 16
-	.byte 0, $9C, $00, $AB, $09, 16
-	.byte 0, $98, $00, $7C, $09, 16
-	.byte 0, $9C, $00, $52, $09, 16
-	.byte 0, $9C, $00, $AB, $09, 16
-	.byte 0, $9C, $00, $52, $09, 16
-	.byte 0, $9C, $00, $7C, $09, 32
+	.byte 0, $9C, $00, $AB, $09, 12
+	.byte 0, $9C, $00, $AB, $09, 12
+	.byte 0, $98, $00, $7C, $09, 12
+	.byte 0, $9C, $00, $52, $09, 12
+	.byte 0, $9C, $00, $AB, $09, 12
+	.byte 0, $9C, $00, $52, $09, 12
+	.byte 0, $9C, $00, $7C, $09, 24
 	.byte $FF
 
 sfx_timeout:
