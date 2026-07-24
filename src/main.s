@@ -126,7 +126,8 @@ TRUCK_TOP_Y   = 144         ; pixel Y of truck top row (tile row 18)
 TRUCK_W_TILES = 8
 TRUCK_H_TILES = 4
 
-; Forklift enemy (16×16 sprites, warehouse floor patrol)
+; Forklift enemies (16×16 sprites, warehouse floor patrol)
+NUM_FORKLIFTS   = 2
 FORKLIFT_W      = 16
 FORKLIFT_H      = 16
 FORKLIFT_Y      = GROUND_TOP_Y - FORKLIFT_H   ; sit on ground
@@ -134,9 +135,14 @@ FORKLIFT_SPD    = 1         ; px/frame
 FORKLIFT_MIN_X  = 24        ; just inside left wall
 FORKLIFT_MAX_L  = $80       ; 384 = 256+128; stop before exit door
 FORKLIFT_MAX_H  = $01
-FORKLIFT_KNOCK  = 24        ; package shoved this far past forklift
+FORKLIFT_KNOCK  = 36        ; package shoved this far past forklift
 FORKLIFT_COOL   = 40        ; frames between knocks
-FORKLIFT_TURN_D = 24        ; px between random turn rolls
+FORKLIFT_TURN_D = 32        ; px between random turn rolls
+; Spawn: FL0 mid-warehouse facing right; FL1 deeper facing left
+FL0_START_L     = 120
+FL0_START_H     = 0
+FL1_START_L     = $40       ; 320 = 256+64
+FL1_START_H     = $01
 
 ; Level timer (NTSC)
 TIMER_SEC_INIT = 25
@@ -203,11 +209,11 @@ sfx_timer:         .res 1   ; frames left in current step
 sfx_pos:           .res 1   ; byte index into current SFX sequence
 sfx_ptr_lo:        .res 1
 sfx_ptr_hi:        .res 1
-forklift_x_lo:     .res 1
-forklift_x_hi:     .res 1
-forklift_dir:      .res 1   ; 0=right, 1=left
-forklift_cool:     .res 1   ; knock cooldown
-forklift_dist:     .res 1   ; px traveled toward next random turn roll
+forklift_x_lo:     .res NUM_FORKLIFTS
+forklift_x_hi:     .res NUM_FORKLIFTS
+forklift_dir:      .res NUM_FORKLIFTS   ; 0=right, 1=left
+forklift_cool:     .res NUM_FORKLIFTS   ; knock cooldown
+forklift_dist:     .res NUM_FORKLIFTS   ; px toward next random turn roll
 rng:               .res 1   ; 8-bit LFSR seed (must be non-zero)
 
 ; -------------------------
@@ -826,14 +832,25 @@ enter_play:
 	sta timer_sec
 	lda #FRAMES_PER_SEC
 	sta timer_frames
-	; Forklift starts mid-warehouse, facing right
-	lda #120
-	sta forklift_x_lo
+	; Forklift 0: mid-warehouse, facing right
+	lda #FL0_START_L
+	sta forklift_x_lo+0
+	lda #FL0_START_H
+	sta forklift_x_hi+0
 	lda #0
-	sta forklift_x_hi
-	sta forklift_dir
-	sta forklift_cool
-	sta forklift_dist
+	sta forklift_dir+0
+	sta forklift_cool+0
+	sta forklift_dist+0
+	; Forklift 1: deeper warehouse, facing left
+	lda #FL1_START_L
+	sta forklift_x_lo+1
+	lda #FL1_START_H
+	sta forklift_x_hi+1
+	lda #1
+	sta forklift_dir+1
+	lda #0
+	sta forklift_cool+1
+	sta forklift_dist+1
 	; Keep RNG non-zero (RAM clear leaves it 0 on first play)
 	lda rng
 	bne @rng_ok
@@ -891,7 +908,7 @@ update_play:
 	jsr update_camera
 	jsr update_package_carry    ; B held = carry (Mario shell style)
 	jsr update_free_package
-	jsr update_forklift
+	jsr update_forklifts
 	jsr update_timer           ; may switch to STATE_TIMEOUT
 	lda game_state
 	cmp #STATE_PLAY
@@ -2524,7 +2541,7 @@ draw_play_sprites:
 	bne @fork
 	jsr draw_world_package
 @fork:
-	jsr draw_forklift
+	jsr draw_forklifts
 	rts
 
 ; Advance walk cycle; 2x when holding B (run). Frozen while paused.
@@ -3080,84 +3097,94 @@ draw_metasprite:
 	rts
 
 ; -------------------------
-; Forklift enemy
+; Forklift enemies (X = index 0..NUM_FORKLIFTS-1)
 ; -------------------------
-update_forklift:
+update_forklifts:
+	ldx #0
+@loop:
+	jsr update_one_forklift
+	inx
+	cpx #NUM_FORKLIFTS
+	bcc @loop
+	rts
+
+; X = forklift index (preserved)
+update_one_forklift:
 	; cooldown tick
-	lda forklift_cool
+	lda forklift_cool, x
 	beq @move
-	dec forklift_cool
+	dec forklift_cool, x
 @move:
-	lda forklift_dir
+	lda forklift_dir, x
 	bne @go_left
 	; move right
-	lda forklift_x_lo
+	lda forklift_x_lo, x
 	clc
 	adc #FORKLIFT_SPD
-	sta forklift_x_lo
-	lda forklift_x_hi
+	sta forklift_x_lo, x
+	lda forklift_x_hi, x
 	adc #0
-	sta forklift_x_hi
+	sta forklift_x_hi, x
 	; hit max?
 	cmp #FORKLIFT_MAX_H
 	bcc @maybe_rand
-	lda forklift_x_lo
+	lda forklift_x_lo, x
 	cmp #FORKLIFT_MAX_L
 	bcc @maybe_rand
 	lda #FORKLIFT_MAX_L
-	sta forklift_x_lo
+	sta forklift_x_lo, x
 	lda #FORKLIFT_MAX_H
-	sta forklift_x_hi
+	sta forklift_x_hi, x
 	lda #1
-	sta forklift_dir
+	sta forklift_dir, x
 	lda #0
-	sta forklift_dist
+	sta forklift_dist, x
 	jmp @collide
 @go_left:
-	lda forklift_x_lo
+	lda forklift_x_lo, x
 	sec
 	sbc #FORKLIFT_SPD
-	sta forklift_x_lo
-	lda forklift_x_hi
+	sta forklift_x_lo, x
+	lda forklift_x_hi, x
 	sbc #0
-	sta forklift_x_hi
+	sta forklift_x_hi, x
 	; hit min? (hi must be 0 and lo < MIN)
 	bne @maybe_rand
-	lda forklift_x_lo
+	lda forklift_x_lo, x
 	cmp #FORKLIFT_MIN_X
 	bcs @maybe_rand
 	lda #FORKLIFT_MIN_X
-	sta forklift_x_lo
+	sta forklift_x_lo, x
 	lda #0
-	sta forklift_x_hi
-	sta forklift_dir
-	sta forklift_dist
+	sta forklift_x_hi, x
+	sta forklift_dir, x
+	sta forklift_dist, x
 	jmp @collide
 @maybe_rand:
 	; every FORKLIFT_TURN_D px: 25% chance to reverse
-	lda forklift_dist
+	lda forklift_dist, x
 	clc
 	adc #FORKLIFT_SPD
-	sta forklift_dist
+	sta forklift_dist, x
 	cmp #FORKLIFT_TURN_D
 	bcc @collide
 	lda #0
-	sta forklift_dist
+	sta forklift_dist, x
 	jsr rand8
 	and #$03                ; 0..3 → 25% when zero
 	bne @collide
-	lda forklift_dir
+	lda forklift_dir, x
 	eor #1
-	sta forklift_dir
+	sta forklift_dir, x
 @collide:
 	; skip if cooldown
-	lda forklift_cool
+	lda forklift_cool, x
 	bne @done
 	jsr forklift_hit_player
 @done:
 	rts
 
-; 8-bit Galois LFSR; returns next value in A (and rng)
+; 8-bit Galois LFSR; returns next value in A (and rng). Preserves X.
 rand8:
 	lda rng
 	beq @reseed             ; never stay stuck at 0
@@ -3171,7 +3198,8 @@ rand8:
 	lda #$A5
 	bne @store              ; always branch
 
-; AABB player vs forklift; if overlap and carrying, knock package away
+; AABB player vs forklift X; if overlap and carrying, knock package away
+; X = forklift index (preserved)
 forklift_hit_player:
 	; Y: player feet below forklift top, player top above forklift bottom
 	; forklift Y is fixed FORKLIFT_Y
@@ -3188,11 +3216,11 @@ forklift_hit_player:
 	cmp temp
 	bcs @no                 ; player entirely below forklift
 	; X: player_x < forklift_x + W
-	lda forklift_x_lo
+	lda forklift_x_lo, x
 	clc
 	adc #FORKLIFT_W
 	sta temp
-	lda forklift_x_hi
+	lda forklift_x_hi, x
 	adc #0
 	sta temp_hi
 	lda player_x_hi
@@ -3212,11 +3240,11 @@ forklift_hit_player:
 	adc #0
 	sta temp_hi
 	lda temp_hi
-	cmp forklift_x_hi
+	cmp forklift_x_hi, x
 	bcc @no
 	bne @hit
 	lda temp
-	cmp forklift_x_lo
+	cmp forklift_x_lo, x
 	bcc @no
 	beq @no
 @hit:
@@ -3225,11 +3253,12 @@ forklift_hit_player:
 	beq @no
 	jsr forklift_knock_package
 	lda #FORKLIFT_COOL
-	sta forklift_cool
+	sta forklift_cool, x
 @no:
 	rts
 
-; Drop package 24px away from forklift (on the player's side)
+; Drop package 24px away from forklift X (on the player's side)
+; X = forklift index (preserved)
 forklift_knock_package:
 	lda #0
 	sta has_package
@@ -3242,23 +3271,23 @@ forklift_knock_package:
 	sta package_on_ground
 	lda #0
 	sta package_vel_y
-	; which side is the player relative to forklift center?
+	; which side is the player relative to forklift?
 	; if player_x >= forklift_x → knock right: forklift_x + W + KNOCK
 	; else knock left: forklift_x - KNOCK - PKG_W
 	lda player_x_hi
-	cmp forklift_x_hi
+	cmp forklift_x_hi, x
 	bcc @knock_l
 	bne @knock_r
 	lda player_x_lo
-	cmp forklift_x_lo
+	cmp forklift_x_lo, x
 	bcc @knock_l
 @knock_r:
 	; package_x = forklift_x + FORKLIFT_W + FORKLIFT_KNOCK
-	lda forklift_x_lo
+	lda forklift_x_lo, x
 	clc
 	adc #FORKLIFT_W
 	sta temp
-	lda forklift_x_hi
+	lda forklift_x_hi, x
 	adc #0
 	sta temp_hi
 	lda temp
@@ -3273,11 +3302,11 @@ forklift_knock_package:
 	jmp @sfx
 @knock_l:
 	; package_x = forklift_x - FORKLIFT_KNOCK - PKG_W
-	lda forklift_x_lo
+	lda forklift_x_lo, x
 	sec
 	sbc #FORKLIFT_KNOCK
 	sta temp
-	lda forklift_x_hi
+	lda forklift_x_hi, x
 	sbc #0
 	sta temp_hi
 	lda temp
@@ -3301,13 +3330,23 @@ forklift_knock_package:
 	jsr play_sfx
 	rts
 
-draw_forklift:
+draw_forklifts:
+	ldx #0
+@loop:
+	jsr draw_one_forklift
+	inx
+	cpx #NUM_FORKLIFTS
+	bcc @loop
+	rts
+
+; X = forklift index (preserved)
+draw_one_forklift:
 	; screen x = forklift world - scroll
-	lda forklift_x_lo
+	lda forklift_x_lo, x
 	sec
 	sbc scroll_lo
 	sta temp
-	lda forklift_x_hi
+	lda forklift_x_hi, x
 	sbc scroll_hi
 	bne @off                ; left of camera or ≥256 px right
 	; NES sprite X is 8-bit and wraps: hide if any tile would cross 256
@@ -3316,19 +3355,24 @@ draw_forklift:
 	bcs @off
 	lda #FORKLIFT_Y
 	sta temp2
-	lda forklift_dir
+	lda forklift_dir, x
 	bne @flip
 	lda #<forklift_metasprite
 	sta metasprite_ptr_lo
 	lda #>forklift_metasprite
 	sta metasprite_ptr_hi
-	jmp draw_metasprite
+	jmp @draw
 @flip:
 	lda #<forklift_metasprite_flip
 	sta metasprite_ptr_lo
 	lda #>forklift_metasprite_flip
 	sta metasprite_ptr_hi
-	jmp draw_metasprite
+@draw:
+	txa
+	pha                     ; draw_metasprite uses X for OAM
+	jsr draw_metasprite
+	pla
+	tax
 @off:
 	rts
 
