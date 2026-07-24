@@ -127,7 +127,7 @@ TRUCK_W_TILES = 8
 TRUCK_H_TILES = 4
 
 ; Level timer (NTSC)
-TIMER_SEC_INIT = 10
+TIMER_SEC_INIT = 25
 FRAMES_PER_SEC = 60
 PAN_SPEED      = 4          ; scroll px/frame during timeout pan
 TRUCK_DRIVE_SPD = 2         ; truck pull-away px/frame
