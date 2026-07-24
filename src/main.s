@@ -3201,6 +3201,8 @@ update_one_forklift:
 	beq @move
 	dec forklift_cool, x
 @move:
+	; free package on floor → face it; else keep current dir (random patrol)
+	jsr forklift_face_package
 	lda forklift_dir, x
 	bne @go_left
 	; move right
@@ -3247,6 +3249,9 @@ update_one_forklift:
 	sta forklift_dist, x
 	jmp @after_move
 @maybe_rand:
+	; seeking free floor package? skip random reverse
+	jsr forklift_package_seekable
+	bcs @after_move
 	; every FORKLIFT_TURN_D px: 25% chance to reverse
 	lda forklift_dist, x
 	clc
@@ -3291,6 +3296,51 @@ rand8:
 @reseed:
 	lda #$A5
 	bne @store              ; always branch
+
+; C=1 if free package is on the floor (forklift Y band) and not held.
+; X = forklift index (preserved). Not seeking if this/other forklift or player holds it.
+forklift_package_seekable:
+	lda forklift_has_pkg, x
+	bne @no
+	lda has_package
+	bne @no
+	lda forklift_has_pkg+0
+	ora forklift_has_pkg+1
+	bne @no
+	lda package_on_ground
+	beq @no
+	; same Y level as forklift (floor band)
+	lda package_y
+	cmp #FORKLIFT_Y - 4
+	bcc @no
+	sec
+	rts
+@no:
+	clc
+	rts
+
+; If seekable package, set forklift_dir toward it. X = index (preserved).
+forklift_face_package:
+	jsr forklift_package_seekable
+	bcc @done
+	; package_x ? forklift_x
+	lda package_x_hi
+	cmp forklift_x_hi, x
+	bcc @left
+	bne @right
+	lda package_x_lo
+	cmp forklift_x_lo, x
+	bcc @left
+	beq @done               ; same x — leave dir alone
+@right:
+	lda #0
+	sta forklift_dir, x
+	rts
+@left:
+	lda #1
+	sta forklift_dir, x
+@done:
+	rts
 
 ; If free package overlaps forklift, claim it on skids. X = index.
 forklift_try_pickup:
