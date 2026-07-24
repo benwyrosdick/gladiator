@@ -475,9 +475,10 @@ PAUSE_LEN = 6
 PAUSE_X0  = 104             ; (256 - 6*8) / 2
 PAUSE_Y   = 112
 
-; SFX sequences: steps of 5 bytes, then $FF
-; type 0 = pulse1: vol ($4000), period_lo, $4003, duration
+; SFX sequences, then $FF
+; type 0 = pulse1: vol ($4000), sweep ($4001), period_lo, $4003, duration
 ; type 1 = noise:  vol ($400C), period ($400E), $400F, duration
+; Sweep $4001: EPPP NSSS — E=enable, PPP=rate, N=negate (1≈pitch up), SSS=shift
 ; $FF = end (silence channels)
 sfx_table:
 	.word 0                 ; SFX_NONE
@@ -487,39 +488,38 @@ sfx_table:
 	.word sfx_win
 	.word sfx_timeout
 
+; Smooth rising boing via hardware sweep (continuous glide, not stepped notes)
 sfx_jump:
-	.byte 0, $9C, $A8, $08, 3
-	.byte 0, $9C, $80, $08, 3
-	.byte 0, $98, $60, $08, 4
+	.byte 0, $98, $9B, $10, $0E, 14
 	.byte $FF
 
 sfx_pickup:
-	.byte 0, $9A, $90, $08, 4
-	.byte 0, $9C, $60, $08, 5
-	.byte 0, $9E, $40, $08, 6
+	.byte 0, $9A, $00, $90, $08, 4
+	.byte 0, $9C, $00, $60, $08, 5
+	.byte 0, $9E, $00, $40, $08, 6
 	.byte $FF
 
 sfx_drop:
-	.byte 0, $98, $C0, $08, 4
-	.byte 0, $94, $E8, $08, 5
+	.byte 0, $98, $00, $C0, $08, 4
+	.byte 0, $94, $00, $E8, $08, 5
 	.byte 1, $3A, $0D, $08, 4   ; soft noise thump
 	.byte $FF
 
 sfx_win:
-	.byte 0, $9C, $AB, $09, 16
-	.byte 0, $9C, $AB, $09, 16
-	.byte 0, $98, $7C, $09, 16
-	.byte 0, $9C, $52, $09, 16
-	.byte 0, $9C, $AB, $09, 16
-	.byte 0, $9C, $52, $09, 16
-	.byte 0, $9C, $7C, $09, 32
+	.byte 0, $9C, $00, $AB, $09, 16
+	.byte 0, $9C, $00, $AB, $09, 16
+	.byte 0, $98, $00, $7C, $09, 16
+	.byte 0, $9C, $00, $52, $09, 16
+	.byte 0, $9C, $00, $AB, $09, 16
+	.byte 0, $9C, $00, $52, $09, 16
+	.byte 0, $9C, $00, $7C, $09, 32
 	.byte $FF
 
 sfx_timeout:
 	.byte 1, $3C, $0A, $18, 6
 	.byte 1, $38, $0C, $18, 8
-	.byte 0, $96, $F0, $28, 10
-	.byte 0, $92, $F8, $28, 12
+	.byte 0, $96, $00, $F0, $28, 10
+	.byte 0, $92, $00, $F8, $28, 12
 	.byte $FF
 
 ; -------------------------
@@ -3198,11 +3198,12 @@ sfx_load_step:
 	beq @silence
 	cmp #0
 	bne @noise
-	; pulse1 step
+	; pulse1: vol, sweep, period_lo, $4003, duration
 	iny
 	lda (sfx_ptr_lo), y
 	sta APU_PULSE1_VOL
-	lda #0
+	iny
+	lda (sfx_ptr_lo), y
 	sta APU_PULSE1_SWEEP
 	iny
 	lda (sfx_ptr_lo), y
@@ -3237,6 +3238,7 @@ sfx_load_step:
 	sta APU_PULSE1_VOL
 	sta APU_NOISE_VOL
 	lda #0
+	sta APU_PULSE1_SWEEP      ; stop any pitch glide
 	sta sfx_timer
 	sta sfx_ptr_lo
 	sta sfx_ptr_hi

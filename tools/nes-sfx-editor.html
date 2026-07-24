@@ -287,8 +287,9 @@
 
     <p class="panel-title" style="margin-top:16px">Steps</p>
     <p class="hint-sm">
-      Type <strong>0</strong> = pulse1: vol ($4000), period_lo, $4003, duration&nbsp;&nbsp;·&nbsp;&nbsp;
-      Type <strong>1</strong> = noise: vol ($400C), period ($400E), $400F, duration
+      Type <strong>0</strong> = pulse1: vol, <strong>sweep</strong> ($4001), period_lo, $4003, duration&nbsp;&nbsp;·&nbsp;&nbsp;
+      Type <strong>1</strong> = noise: vol, period, $400F, duration.
+      Sweep bit7=enable, bits6–4=rate, bit3=negate (1≈pitch up), bits2–0=shift.
     </p>
     <div class="steps" id="steps"></div>
   </section>
@@ -320,34 +321,35 @@
   const CPU = 1789773;
   const FRAME = 1 / 60;
 
-  /** Default library from VESYL main.s */
+  /** Default library from VESYL main.s (pulse includes sweep) */
   const PRESETS = {
     sfx_jump: [
-      { type: 0, a: 0x9c, b: 0xa8, c: 0x08, dur: 3 },
-      { type: 0, a: 0x9c, b: 0x80, c: 0x08, dur: 3 },
-      { type: 0, a: 0x98, b: 0x60, c: 0x08, dur: 4 },
+      { type: 0, a: 0x98, sweep: 0x9b, b: 0x10, c: 0x0e, dur: 14 },
     ],
     sfx_pickup: [
-      { type: 0, a: 0x9a, b: 0x90, c: 0x08, dur: 4 },
-      { type: 0, a: 0x9c, b: 0x60, c: 0x08, dur: 5 },
-      { type: 0, a: 0x9e, b: 0x40, c: 0x08, dur: 6 },
+      { type: 0, a: 0x9a, sweep: 0x00, b: 0x90, c: 0x08, dur: 4 },
+      { type: 0, a: 0x9c, sweep: 0x00, b: 0x60, c: 0x08, dur: 5 },
+      { type: 0, a: 0x9e, sweep: 0x00, b: 0x40, c: 0x08, dur: 6 },
     ],
     sfx_drop: [
-      { type: 0, a: 0x98, b: 0xc0, c: 0x08, dur: 4 },
-      { type: 0, a: 0x94, b: 0xe8, c: 0x08, dur: 5 },
-      { type: 1, a: 0x3a, b: 0x0d, c: 0x08, dur: 4 },
+      { type: 0, a: 0x98, sweep: 0x00, b: 0xc0, c: 0x08, dur: 4 },
+      { type: 0, a: 0x94, sweep: 0x00, b: 0xe8, c: 0x08, dur: 5 },
+      { type: 1, a: 0x3a, sweep: 0, b: 0x0d, c: 0x08, dur: 4 },
     ],
     sfx_win: [
-      { type: 0, a: 0x9e, b: 0xa0, c: 0x08, dur: 5 },
-      { type: 0, a: 0x9e, b: 0x80, c: 0x08, dur: 5 },
-      { type: 0, a: 0x9e, b: 0x60, c: 0x08, dur: 6 },
-      { type: 0, a: 0x9f, b: 0x40, c: 0x08, dur: 10 },
+      { type: 0, a: 0x9c, sweep: 0x00, b: 0xab, c: 0x09, dur: 16 },
+      { type: 0, a: 0x9c, sweep: 0x00, b: 0xab, c: 0x09, dur: 16 },
+      { type: 0, a: 0x98, sweep: 0x00, b: 0x7c, c: 0x09, dur: 16 },
+      { type: 0, a: 0x9c, sweep: 0x00, b: 0x52, c: 0x09, dur: 16 },
+      { type: 0, a: 0x9c, sweep: 0x00, b: 0xab, c: 0x09, dur: 16 },
+      { type: 0, a: 0x9c, sweep: 0x00, b: 0x52, c: 0x09, dur: 16 },
+      { type: 0, a: 0x9c, sweep: 0x00, b: 0x7c, c: 0x09, dur: 32 },
     ],
     sfx_timeout: [
-      { type: 1, a: 0x3c, b: 0x0a, c: 0x18, dur: 6 },
-      { type: 1, a: 0x38, b: 0x0c, c: 0x18, dur: 8 },
-      { type: 0, a: 0x96, b: 0xf0, c: 0x28, dur: 10 },
-      { type: 0, a: 0x92, b: 0xf8, c: 0x28, dur: 12 },
+      { type: 1, a: 0x3c, sweep: 0, b: 0x0a, c: 0x18, dur: 6 },
+      { type: 1, a: 0x38, sweep: 0, b: 0x0c, c: 0x18, dur: 8 },
+      { type: 0, a: 0x96, sweep: 0x00, b: 0xf0, c: 0x28, dur: 10 },
+      { type: 0, a: 0x92, sweep: 0x00, b: 0xf8, c: 0x28, dur: 12 },
     ],
   };
 
@@ -359,7 +361,7 @@
   const playBar = document.getElementById("playBar");
   const masterVolEl = document.getElementById("masterVol");
 
-  /** @type {{type:number,a:number,b:number,c:number,dur:number}[]} */
+  /** @type {{type:number,a:number,sweep:number,b:number,c:number,dur:number}[]} */
   let steps = cloneSteps(PRESETS.sfx_jump);
   let playTimer = null;
   let audioCtx = null;
@@ -367,7 +369,14 @@
   let playingIndex = -1;
 
   function cloneSteps(arr) {
-    return arr.map((s) => ({ type: s.type, a: s.a, b: s.b, c: s.c, dur: s.dur }));
+    return arr.map((s) => ({
+      type: s.type,
+      a: s.a,
+      sweep: s.sweep || 0,
+      b: s.b,
+      c: s.c,
+      dur: s.dur,
+    }));
   }
 
   function setStatus(msg, kind) {
@@ -493,6 +502,21 @@
     return [0.125, 0.25, 0.5, 0.75][d];
   }
 
+  function getDuty(vol) {
+    return (vol >> 6) & 3;
+  }
+
+  function setDuty(step, duty) {
+    step.a = (step.a & 0x3f) | ((duty & 3) << 6);
+  }
+
+  const DUTY_OPTIONS = [
+    { v: 0, label: "12.5%" },
+    { v: 1, label: "25%" },
+    { v: 2, label: "50%" },
+    { v: 3, label: "25% neg" },
+  ];
+
   function volLevel(vol) {
     // constant volume mode: low nibble; bit 4 = constant
     return (vol & 0x0f) / 15;
@@ -511,18 +535,31 @@
     const label = (labelEl.value || "sfx").trim().replace(/\s+/g, "_");
     const lines = [label + ":"];
     for (const st of steps) {
-      lines.push(
-        "\t.byte " +
-          st.type +
-          ", " +
-          hexByte(st.a) +
-          ", " +
-          hexByte(st.b) +
-          ", " +
-          hexByte(st.c) +
-          ", " +
-          (st.dur | 0)
-      );
+      if (st.type === 0) {
+        lines.push(
+          "\t.byte 0, " +
+            hexByte(st.a) +
+            ", " +
+            hexByte(st.sweep || 0) +
+            ", " +
+            hexByte(st.b) +
+            ", " +
+            hexByte(st.c) +
+            ", " +
+            (st.dur | 0)
+        );
+      } else {
+        lines.push(
+          "\t.byte 1, " +
+            hexByte(st.a) +
+            ", " +
+            hexByte(st.b) +
+            ", " +
+            hexByte(st.c) +
+            ", " +
+            (st.dur | 0)
+        );
+      }
     }
     lines.push("\t.byte $FF");
     return lines.join("\n") + "\n";
@@ -571,23 +608,39 @@
     let i = 0;
     while (i < bytes.length) {
       if (bytes[i] === 0xff) break;
-      if (i + 4 >= bytes.length) {
-        throw new Error("Truncated step at byte " + i + " (need 5 bytes or $FF)");
-      }
       const type = bytes[i];
-      if (type !== 0 && type !== 1) {
+      if (type === 0) {
+        // 0, vol, sweep, lo, hi, dur
+        if (i + 5 >= bytes.length) {
+          throw new Error("Truncated pulse step at " + i + " (need 6 bytes)");
+        }
+        out.push({
+          type: 0,
+          a: bytes[i + 1],
+          sweep: bytes[i + 2],
+          b: bytes[i + 3],
+          c: bytes[i + 4],
+          dur: Math.max(1, bytes[i + 5]),
+        });
+        i += 6;
+      } else if (type === 1) {
+        if (i + 4 >= bytes.length) {
+          throw new Error("Truncated noise step at " + i + " (need 5 bytes)");
+        }
+        out.push({
+          type: 1,
+          a: bytes[i + 1],
+          sweep: 0,
+          b: bytes[i + 2],
+          c: bytes[i + 3],
+          dur: Math.max(1, bytes[i + 4]),
+        });
+        i += 5;
+      } else {
         throw new Error(
           "Bad step type " + type + " at index " + i + " (want 0=pulse, 1=noise, or $FF)"
         );
       }
-      out.push({
-        type,
-        a: bytes[i + 1],
-        b: bytes[i + 2],
-        c: bytes[i + 3],
-        dur: Math.max(1, bytes[i + 4]),
-      });
-      i += 5;
     }
     if (out.length === 0) throw new Error("No steps before $FF");
     steps = out;
@@ -647,9 +700,29 @@
     if (step.type === 0) {
       const osc = ctx.createOscillator();
       osc.type = "square";
-      const hz = pulseHz(step.b, step.c);
-      osc.frequency.setValueAtTime(Math.max(20, hz || 20), when);
-      // Approximate duty with wave shaper is heavy; square is fine for design
+      const startHz = Math.max(20, pulseHz(step.b, step.c) || 20);
+      osc.frequency.setValueAtTime(startHz, when);
+      // Approximate hardware sweep as a continuous glide for preview
+      const sw = step.sweep || 0;
+      if (sw & 0x80) {
+        let t = pulsePeriod(step.b, step.c);
+        const shift = sw & 7;
+        const negate = (sw & 0x08) !== 0;
+        const rate = ((sw >> 4) & 7) + 1;
+        // Sweep clocks ~120 Hz; game frames 60 Hz → ~2 clocks per frame
+        const clocks = Math.max(1, Math.floor((step.dur * 2) / rate));
+        for (let k = 0; k < clocks; k++) {
+          const delta = t >> shift;
+          if (negate) t = Math.max(8, t - delta - 1);
+          else t = Math.min(2047, t + delta);
+        }
+        const endHz = Math.max(20, CPU / (16 * (t + 1)));
+        try {
+          osc.frequency.exponentialRampToValueAtTime(endHz, when + durationSec);
+        } catch (_) {
+          osc.frequency.linearRampToValueAtTime(endHz, when + durationSec);
+        }
+      }
       osc.connect(g);
       osc.start(when);
       osc.stop(when + durationSec + 0.02);
@@ -752,12 +825,49 @@
       fields.appendChild(chip);
 
       // vol
-      fields.appendChild(
-        numField(st.type === 0 ? "Vol $4000" : "Vol $400C", st.a, (v) => {
+      const fieldA = numField(
+        st.type === 0 ? "Vol $4000" : "Vol $400C",
+        st.a,
+        (v) => {
           st.a = v;
           syncExport();
-        })
+          renderSteps();
+        }
       );
+      const inpA = fieldA.querySelector("input");
+      fields.appendChild(fieldA);
+
+      if (st.type === 0) {
+        if (st.sweep === undefined) st.sweep = 0;
+        // Duty $4000 bits 7–6
+        const dutyG = document.createElement("div");
+        dutyG.className = "field-group";
+        dutyG.innerHTML = "<span>Duty</span>";
+        const dutySel = document.createElement("select");
+        DUTY_OPTIONS.forEach((d) => {
+          const o = document.createElement("option");
+          o.value = String(d.v);
+          o.textContent = d.label;
+          dutySel.appendChild(o);
+        });
+        dutySel.value = String(getDuty(st.a));
+        dutySel.addEventListener("change", () => {
+          setDuty(st, +dutySel.value);
+          inpA.value = hexByte(st.a);
+          syncExport();
+        });
+        dutyG.appendChild(dutySel);
+        fields.appendChild(dutyG);
+
+        // Hardware pitch sweep $4001
+        fields.appendChild(
+          numField("Sweep $4001", st.sweep, (v) => {
+            st.sweep = v;
+            syncExport();
+          })
+        );
+      }
+
       // b / c — period fields (updated by pitch slider)
       const fieldB = numField(
         st.type === 0 ? "Period lo" : "Period $400E",
@@ -1039,7 +1149,7 @@
     setStatus("Stopped", "ok");
   });
   document.getElementById("btnAdd").addEventListener("click", () => {
-    steps.push({ type: 0, a: 0x9c, b: 0x80, c: 0x08, dur: 4 });
+    steps.push({ type: 0, a: 0x9c, sweep: 0x00, b: 0x80, c: 0x08, dur: 4 });
     syncExport();
     renderSteps();
     setStatus("Added step", "ok");
