@@ -139,7 +139,7 @@ FORKLIFT_KNOCK  = 36        ; package shoved this far past forklift
 FORKLIFT_COOL   = 40        ; frames between knocks
 FORKLIFT_TURN_D = 32        ; px between random turn rolls
 FORKLIFT_STUN   = 180       ; disabled frames after stomp (3s @ 60Hz)
-FORKLIFT_PKG_Y  = FORKLIFT_Y + 4  ; package on skids (~2px higher than body mid)
+FORKLIFT_PKG_Y  = FORKLIFT_Y + 3  ; package on skids
 ; Spawn: FL0 mid-warehouse facing right; FL1 deeper facing left
 FL0_START_L     = 120
 FL0_START_H     = 0
@@ -3370,20 +3370,20 @@ forklift_sync_package:
 	sta package_y
 	lda forklift_dir, x
 	bne @face_l
-	; facing right — package on right half
+	; facing right — nest in skids (+12 from forklift left)
 	lda forklift_x_lo, x
 	clc
-	adc #6
+	adc #12
 	sta package_x_lo
 	lda forklift_x_hi, x
 	adc #0
 	sta package_x_hi
 	rts
 @face_l:
-	; facing left — package on left (may sit slightly past left edge)
+	; facing left — nest in skids (2px further left than before)
 	lda forklift_x_lo, x
 	sec
-	sbc #(PKG_W - 6)
+	sbc #(PKG_W - 4)        ; was PKG_W-6; -2 more → left
 	sta package_x_lo
 	lda forklift_x_hi, x
 	sbc #0
@@ -3395,7 +3395,7 @@ forklift_sync_package:
 @ok:
 	rts
 
-; Drop package on the ground under/at forklift (stomp release). X = index.
+; Drop package on the ground in front of forklift (stomp release). X = index.
 forklift_drop_package:
 	lda forklift_has_pkg, x
 	beq @no
@@ -3407,14 +3407,32 @@ forklift_drop_package:
 	sta package_vel_y
 	lda #GROUND_TOP_Y - PKG_H
 	sta package_y
-	; center package under forklift
+	; place just past the skids in facing direction
+	lda forklift_dir, x
+	bne @drop_l
+	; facing right → in front = right of forklift
 	lda forklift_x_lo, x
 	clc
-	adc #((FORKLIFT_W - PKG_W) / 2)
+	adc #FORKLIFT_W
 	sta package_x_lo
 	lda forklift_x_hi, x
 	adc #0
 	sta package_x_hi
+	jmp @land
+@drop_l:
+	; facing left → in front = left of forklift
+	lda forklift_x_lo, x
+	sec
+	sbc #PKG_W
+	sta package_x_lo
+	lda forklift_x_hi, x
+	sbc #0
+	sta package_x_hi
+	bpl @land
+	lda #0
+	sta package_x_lo
+	sta package_x_hi
+@land:
 	lda #1
 	sta package_on_ground
 	lda #SFX_DROP
