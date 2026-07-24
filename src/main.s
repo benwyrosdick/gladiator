@@ -35,6 +35,7 @@ SFX_PICKUP   = 2
 SFX_DROP     = 3
 SFX_WIN      = 4
 SFX_TIMEOUT  = 5
+SFX_HIT      = 6            ; package lands on ground / platform
 
 ; Game states
 STATE_TITLE    = 0
@@ -126,7 +127,7 @@ TRUCK_W_TILES = 8
 TRUCK_H_TILES = 4
 
 ; Level timer (NTSC)
-TIMER_SEC_INIT = 20
+TIMER_SEC_INIT = 10
 FRAMES_PER_SEC = 60
 PAN_SPEED      = 4          ; scroll px/frame during timeout pan
 TRUCK_DRIVE_SPD = 2         ; truck pull-away px/frame
@@ -487,6 +488,7 @@ sfx_table:
 	.word sfx_drop
 	.word sfx_win
 	.word sfx_timeout
+	.word sfx_hit
 
 ; Smooth rising boing via hardware sweep (continuous glide, not stepped notes)
 sfx_jump:
@@ -494,15 +496,17 @@ sfx_jump:
 	.byte $FF
 
 sfx_pickup:
-	.byte 0, $9A, $00, $90, $08, 4
-	.byte 0, $9C, $00, $60, $08, 5
-	.byte 0, $9E, $00, $40, $08, 6
+	.byte 0, $98, $8B, $0C, $09, 4
 	.byte $FF
 
+; Release / throw (still in air)
 sfx_drop:
-	.byte 0, $98, $00, $C0, $08, 4
-	.byte 0, $94, $00, $E8, $08, 5
-	.byte 1, $3A, $0D, $08, 4   ; soft noise thump
+	.byte 0, $98, $83, $0C, $09, 4
+	.byte $FF
+
+; Package impact on ground or platform
+sfx_hit:
+	.byte 1, $3C, $0C, $08, 3   ; noise thump
 	.byte $FF
 
 sfx_win:
@@ -516,8 +520,8 @@ sfx_win:
 	.byte $FF
 
 sfx_timeout:
-	.byte 1, $3C, $0A, $18, 6
-	.byte 1, $38, $0C, $18, 8
+	.byte 1, $3C, $0A, $18, 26
+	.byte 1, $38, $0C, $18, 28
 	.byte 0, $96, $00, $F0, $28, 10
 	.byte 0, $92, $00, $F8, $28, 12
 	.byte $FF
@@ -1840,6 +1844,8 @@ package_landed:
 	sta package_y_sub
 	lda #1
 	sta package_on_ground
+	lda #SFX_HIT
+	jsr play_sfx
 	rts
 
 ; Package vs warehouse walls/ceiling (same rules as player)
