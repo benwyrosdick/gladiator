@@ -94,8 +94,8 @@ WH_DOOR_TOP   = 144         ; open doorway for y >= 144 (tile rows 18+)
 WH_CEILING    = 40          ; bottom of ceiling (row 5 → y 40)
 
 ; Climbable shelves inside warehouse (~24px steps)
-SHELF_MID_Y   = 128         ; row 16
-SHELF_HIGH_Y  = 104         ; row 13 — package spawn
+SHELF_MID_Y   = 120         ; row 15
+SHELF_HIGH_Y  = 96          ; row 12 — package spawn
 SHELF_MID_L   = 104
 SHELF_MID_R   = 152
 SHELF_HIGH_L  = 24
@@ -382,6 +382,7 @@ font_space:
 	.byte $44,$44,$28,$10,$10,$10,$10,$00,$44,$44,$28,$10,$10,$10,$10,$00  ; Y
 	.byte $7C,$04,$08,$10,$20,$40,$7C,$00,$7C,$04,$08,$10,$20,$40,$7C,$00  ; Z
 	.byte $10,$10,$10,$10,$10,$00,$10,$00,$10,$10,$10,$10,$10,$00,$10,$00  ; !
+	.byte $30,$30,$10,$20,$00,$00,$00,$00,$30,$30,$10,$20,$00,$00,$00,$00  ; '
 
 ; digits 0-9 for timer HUD
 font_digits:
@@ -420,7 +421,7 @@ T_DELIVERY_TRUCK   = (delivery_truck_tiles - tiles) / 16
 T_FORKLIFT         = (forklift_tiles - tiles) / 16
 T_FONT             = (font_space - tiles) / 16
 T_DIGIT0           = (font_digits - tiles) / 16
-; font relative: 0=space, 1=A … 26=Z, 27=!
+; font relative: 0=space, 1=A … 26=Z, 27=!, 28='
 
 ; Metasprite tile aliases (player_s_* labels)
 PLAYER_IDLE_0 = T_PLAYER_S_0_IDLE
@@ -519,8 +520,8 @@ str_fail:
 	; T I M E   U P !
 	.byte 20,9,13,5, 0, 21,16, 27, $FF
 str_acme:
-	; A C M E
-	.byte 1,3,13,5, $FF
+	; unused; sign is drawn with absolute tiles in draw_warehouse
+	.byte 13,9,11,5, 28,19, $FF
 ; Sprite tile indices for PAUSED overlay (absolute CHR)
 pause_tiles:
 	.byte T_FONT+16, T_FONT+1, T_FONT+21, T_FONT+19, T_FONT+5, T_FONT+4
@@ -2877,38 +2878,53 @@ draw_warehouse:
 	dex
 	bne @c1
 
-	; ACME signboard on roof (rows 2-4, cols 4-9)
+	; MIKE'S 3PL signboard on roof (rows 2-4, cols 2-13 = 12 tiles)
+	; top brick bar
 	lda #$20
 	sta PPUADDR
-	lda #$44
+	lda #$42                ; row 2 col 2
 	sta PPUADDR
-	ldx #6
+	ldx #12
 	lda #T_BRICK
 @sign_top:
 	sta PPUDATA
 	dex
 	bne @sign_top
+	; text row: | M I K E ' S   3 P L |
 	lda #$20
 	sta PPUADDR
-	lda #$64
+	lda #$62                ; row 3 col 2
 	sta PPUADDR
 	lda #T_BRICK
 	sta PPUDATA
-	lda #T_FONT + 1
+	lda #T_FONT + 13        ; M
 	sta PPUDATA
-	lda #T_FONT + 3
+	lda #T_FONT + 9         ; I
 	sta PPUDATA
-	lda #T_FONT + 13
+	lda #T_FONT + 11        ; K
 	sta PPUDATA
-	lda #T_FONT + 5
+	lda #T_FONT + 5         ; E
+	sta PPUDATA
+	lda #T_FONT + 28        ; '
+	sta PPUDATA
+	lda #T_FONT + 19        ; S
+	sta PPUDATA
+	lda #T_FONT + 0         ; space
+	sta PPUDATA
+	lda #T_DIGIT0 + 3       ; 3
+	sta PPUDATA
+	lda #T_FONT + 16        ; P
+	sta PPUDATA
+	lda #T_FONT + 12        ; L
 	sta PPUDATA
 	lda #T_BRICK
 	sta PPUDATA
+	; bottom brick bar
 	lda #$20
 	sta PPUADDR
-	lda #$84
+	lda #$82                ; row 4 col 2
 	sta PPUADDR
-	ldx #6
+	ldx #12
 	lda #T_BRICK
 @sign_bot:
 	sta PPUDATA
@@ -2957,10 +2973,10 @@ draw_warehouse:
 
 	; Shelves — cols from SHELF_* ; tile count covers full [L,R) even if not 8-aligned:
 	;   col = L/8 , count = (R-1)/8 - L/8 + 1
-	; High shelf row 13 (y=SHELF_HIGH_Y)
+	; High shelf row 12 (y=SHELF_HIGH_Y=96)
 	lda #$21
 	sta PPUADDR
-	lda #($A0 + SHELF_HIGH_L / 8)   ; 13*32 + col
+	lda #($80 + SHELF_HIGH_L / 8)   ; 12*32 + col
 	sta PPUADDR
 	ldx #((SHELF_HIGH_R - 1) / 8 - SHELF_HIGH_L / 8 + 1)
 	lda #T_PLATFORM
@@ -2969,10 +2985,10 @@ draw_warehouse:
 	dex
 	bne @sh
 
-	; Mid shelf row 16 (y=SHELF_MID_Y) — NT0 only (x < 256)
-	lda #$22
+	; Mid shelf row 15 (y=SHELF_MID_Y=120) — NT0 only (x < 256)
+	lda #$21
 	sta PPUADDR
-	lda #(SHELF_MID_L / 8)          ; 16*32 + col → hi $22, lo = col
+	lda #($E0 + SHELF_MID_L / 8)    ; 15*32 + col
 	sta PPUADDR
 	ldx #((SHELF_MID_R - 1) / 8 - SHELF_MID_L / 8 + 1)
 	lda #T_PLATFORM
