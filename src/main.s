@@ -138,6 +138,8 @@ FORKLIFT_MAX_H  = $01
 FORKLIFT_KNOCK  = 36        ; package shoved this far past forklift
 FORKLIFT_COOL   = 40        ; frames between knocks
 FORKLIFT_TURN_D = 32        ; px between random turn rolls
+FORKLIFT_STUN   = 180       ; disabled frames after stomp (3s @ 60Hz)
+FORKLIFT_PKG_Y  = FORKLIFT_Y + 4  ; package on skids (~2px higher than body mid)
 ; Spawn: FL0 mid-warehouse facing right; FL1 deeper facing left
 FL0_START_L     = 120
 FL0_START_H     = 0
@@ -214,6 +216,8 @@ forklift_x_hi:     .res NUM_FORKLIFTS
 forklift_dir:      .res NUM_FORKLIFTS   ; 0=right, 1=left
 forklift_cool:     .res NUM_FORKLIFTS   ; knock cooldown
 forklift_dist:     .res NUM_FORKLIFTS   ; px toward next random turn roll
+forklift_stun:     .res NUM_FORKLIFTS   ; frames left disabled (0 = active)
+forklift_has_pkg:  .res NUM_FORKLIFTS   ; 1 = carrying package on skids
 rng:               .res 1   ; 8-bit LFSR seed (must be non-zero)
 
 ; -------------------------
@@ -847,6 +851,8 @@ enter_play:
 	sta forklift_dir+0
 	sta forklift_cool+0
 	sta forklift_dist+0
+	sta forklift_stun+0
+	sta forklift_has_pkg+0
 	; Forklift 1: deeper warehouse, facing left
 	lda #FL1_START_L
 	sta forklift_x_lo+1
@@ -857,6 +863,8 @@ enter_play:
 	lda #0
 	sta forklift_cool+1
 	sta forklift_dist+1
+	sta forklift_stun+1
+	sta forklift_has_pkg+1
 	; Keep RNG non-zero (RAM clear leaves it 0 on first play)
 	lda rng
 	bne @rng_ok
@@ -1702,6 +1710,10 @@ update_package_carry:
 
 ; C not used; sets has_package if AABB overlap with free package
 try_pickup_package:
+	; can't take package off forklift skids — stomp to free it
+	lda forklift_has_pkg+0
+	ora forklift_has_pkg+1
+	bne @no
 	; Y overlap
 	lda player_y
 	clc
@@ -1829,7 +1841,12 @@ drop_package:
 ; Free package: horizontal coast/throw + gravity + land
 update_free_package:
 	lda has_package
+	bne @held
+	; forklift is carrying — position synced in update_forklifts
+	lda forklift_has_pkg+0
+	ora forklift_has_pkg+1
 	beq @run
+@held:
 	rts
 @run:
 	; Ground friction on X (air keeps full throw speed)
@@ -2542,11 +2559,11 @@ draw_play_sprites:
 	sta temp
 	jsr draw_metasprite
 
-	; World package only while not carrying
+	; World package before forklifts → lower OAM = in front (on skids)
 	lda has_package
-	bne @fork
+	bne @forks
 	jsr draw_world_package
-@fork:
+@forks:
 	jsr draw_forklifts
 	rts
 
@@ -3173,7 +3190,13 @@ update_forklifts:
 
 ; X = forklift index (preserved)
 update_one_forklift:
-	; cooldown tick
+	; stun tick — disabled: no move / pickup / knock
+	lda forklift_stun, x
+	beq @active
+	dec forklift_stun, x
+	rts
+@active:
+	; knock cooldown tick
 	lda forklift_cool, x
 	beq @move
 	dec forklift_cool, x
@@ -3202,7 +3225,7 @@ update_one_forklift:
 	sta forklift_dir, x
 	lda #0
 	sta forklift_dist, x
-	jmp @collide
+	jmp @after_move
 @go_left:
 	lda forklift_x_lo, x
 	sec
@@ -3222,7 +3245,7 @@ update_one_forklift:
 	sta forklift_x_hi, x
 	sta forklift_dir, x
 	sta forklift_dist, x
-	jmp @collide
+	jmp @after_move
 @maybe_rand:
 	; every FORKLIFT_TURN_D px: 25% chance to reverse
 	lda forklift_dist, x
@@ -3230,17 +3253,25 @@ update_one_forklift:
 	adc #FORKLIFT_SPD
 	sta forklift_dist, x
 	cmp #FORKLIFT_TURN_D
-	bcc @collide
+	bcc @after_move
 	lda #0
 	sta forklift_dist, x
 	jsr rand8
 	and #$03                ; 0..3 → 25% when zero
-	bne @collide
+	bne @after_move
 	lda forklift_dir, x
 	eor #1
 	sta forklift_dir, x
-@collide:
-	; skip if cooldown
+@after_move:
+	; roll over free ground package → pick up on skids
+	lda forklift_has_pkg, x
+	bne @holding
+	jsr forklift_try_pickup
+	jmp @player
+@holding:
+	jsr forklift_sync_package
+@player:
+	; stomp / side knock
 	lda forklift_cool, x
 	bne @done
 	jsr forklift_hit_player
@@ -3261,24 +3292,140 @@ rand8:
 	lda #$A5
 	bne @store              ; always branch
 
-; AABB player vs forklift X; if overlap and carrying, knock package away
-; X = forklift index (preserved)
-forklift_hit_player:
-	; Y: player feet below forklift top, player top above forklift bottom
-	; forklift Y is fixed FORKLIFT_Y
-	lda player_y
+; If free package overlaps forklift, claim it on skids. X = index.
+forklift_try_pickup:
+	lda has_package
+	bne @no
+	; another forklift already has it?
+	lda forklift_has_pkg+0
+	ora forklift_has_pkg+1
+	bne @no
+	; package roughly on floor band (not high on a shelf)
+	lda package_y
+	cmp #FORKLIFT_Y - 4
+	bcc @no
+	; Y AABB: package overlaps forklift body
+	lda package_y
 	clc
-	adc #PLAYER_H
+	adc #PKG_H
 	cmp #FORKLIFT_Y
-	bcc @no                 ; player entirely above forklift
+	bcc @no
 	lda #FORKLIFT_Y
 	clc
 	adc #FORKLIFT_H
 	sta temp
-	lda player_y
+	lda package_y
 	cmp temp
-	bcs @no                 ; player entirely below forklift
-	; X: player_x < forklift_x + W
+	bcs @no
+	; X: package_x < forklift_x + W
+	lda forklift_x_lo, x
+	clc
+	adc #FORKLIFT_W
+	sta temp
+	lda forklift_x_hi, x
+	adc #0
+	sta temp_hi
+	lda package_x_hi
+	cmp temp_hi
+	bcc @chk_r
+	bne @no
+	lda package_x_lo
+	cmp temp
+	bcs @no
+@chk_r:
+	; package_x + PKG_W > forklift_x
+	lda package_x_lo
+	clc
+	adc #PKG_W
+	sta temp
+	lda package_x_hi
+	adc #0
+	sta temp_hi
+	lda temp_hi
+	cmp forklift_x_hi, x
+	bcc @no
+	bne @grab
+	lda temp
+	cmp forklift_x_lo, x
+	bcc @no
+	beq @no
+@grab:
+	lda #1
+	sta forklift_has_pkg, x
+	lda #0
+	sta package_vel_x
+	sta package_vel_y
+	sta package_x_sub
+	sta package_y_sub
+	sta package_on_ground
+	jsr forklift_sync_package
+	lda #SFX_PICKUP
+	jsr play_sfx
+@no:
+	rts
+
+; Snap package to skids in front of forklift. X = index.
+forklift_sync_package:
+	lda #FORKLIFT_PKG_Y
+	sta package_y
+	lda forklift_dir, x
+	bne @face_l
+	; facing right — package on right half
+	lda forklift_x_lo, x
+	clc
+	adc #6
+	sta package_x_lo
+	lda forklift_x_hi, x
+	adc #0
+	sta package_x_hi
+	rts
+@face_l:
+	; facing left — package on left (may sit slightly past left edge)
+	lda forklift_x_lo, x
+	sec
+	sbc #(PKG_W - 6)
+	sta package_x_lo
+	lda forklift_x_hi, x
+	sbc #0
+	sta package_x_hi
+	bpl @ok
+	lda #0
+	sta package_x_lo
+	sta package_x_hi
+@ok:
+	rts
+
+; Drop package on the ground under/at forklift (stomp release). X = index.
+forklift_drop_package:
+	lda forklift_has_pkg, x
+	beq @no
+	lda #0
+	sta forklift_has_pkg, x
+	sta package_x_sub
+	sta package_y_sub
+	sta package_vel_x
+	sta package_vel_y
+	lda #GROUND_TOP_Y - PKG_H
+	sta package_y
+	; center package under forklift
+	lda forklift_x_lo, x
+	clc
+	adc #((FORKLIFT_W - PKG_W) / 2)
+	sta package_x_lo
+	lda forklift_x_hi, x
+	adc #0
+	sta package_x_hi
+	lda #1
+	sta package_on_ground
+	lda #SFX_DROP
+	jsr play_sfx
+@no:
+	rts
+
+; AABB player vs forklift: stomp from above disables + drops; side hit knocks player package
+; X = forklift index (preserved)
+forklift_hit_player:
+	; X overlap first
 	lda forklift_x_lo, x
 	clc
 	adc #FORKLIFT_W
@@ -3288,13 +3435,12 @@ forklift_hit_player:
 	sta temp_hi
 	lda player_x_hi
 	cmp temp_hi
-	bcc @chk_r
+	bcc @x_r
 	bne @no
 	lda player_x_lo
 	cmp temp
 	bcs @no
-@chk_r:
-	; player_x + PLAYER_W > forklift_x
+@x_r:
 	lda player_x_lo
 	clc
 	adc #PLAYER_W
@@ -3305,13 +3451,56 @@ forklift_hit_player:
 	lda temp_hi
 	cmp forklift_x_hi, x
 	bcc @no
-	bne @hit
+	bne @x_ok
 	lda temp
 	cmp forklift_x_lo, x
 	bcc @no
 	beq @no
-@hit:
-	; only knock if player has the package
+@x_ok:
+	; feet = player_y + PLAYER_H
+	lda player_y
+	clc
+	adc #PLAYER_H
+	sta temp3
+	; --- stomp: falling onto forklift top ---
+	lda vel_y
+	bmi @side                ; rising
+	beq @side
+	; feet near forklift top (landing window)
+	lda temp3
+	cmp #FORKLIFT_Y - 2
+	bcc @no                  ; still well above
+	cmp #FORKLIFT_Y + 10
+	bcs @side                ; too low for a stomp
+	; player body must come from above (top of player above forklift top)
+	lda player_y
+	cmp #FORKLIFT_Y
+	bcs @side
+@stomp:
+	lda #FORKLIFT_STUN
+	sta forklift_stun, x
+	; small bounce
+	lda #0
+	sta on_ground
+	lda #JUMP_CUT            ; mild hop
+	sta vel_y
+	jsr forklift_drop_package
+	lda #FORKLIFT_COOL
+	sta forklift_cool, x
+	rts
+@side:
+	; full body Y overlap for side collision
+	lda temp3
+	cmp #FORKLIFT_Y
+	bcc @no
+	lda #FORKLIFT_Y
+	clc
+	adc #FORKLIFT_H
+	sta temp
+	lda player_y
+	cmp temp
+	bcs @no
+	; knock package off player if carrying
 	lda has_package
 	beq @no
 	jsr forklift_knock_package
@@ -3320,23 +3509,19 @@ forklift_hit_player:
 @no:
 	rts
 
-; Drop package 24px away from forklift X (on the player's side)
-; X = forklift index (preserved)
+; Knock package off player (side hit). X = forklift index.
 forklift_knock_package:
 	lda #0
 	sta has_package
 	sta package_x_sub
 	sta package_y_sub
-	; package on floor
 	lda #GROUND_TOP_Y - PKG_H
 	sta package_y
 	lda #1
 	sta package_on_ground
 	lda #0
 	sta package_vel_y
-	; which side is the player relative to forklift?
-	; if player_x >= forklift_x → knock right: forklift_x + W + KNOCK
-	; else knock left: forklift_x - KNOCK - PKG_W
+	; knock away from forklift on player's side
 	lda player_x_hi
 	cmp forklift_x_hi, x
 	bcc @knock_l
@@ -3345,7 +3530,6 @@ forklift_knock_package:
 	cmp forklift_x_lo, x
 	bcc @knock_l
 @knock_r:
-	; package_x = forklift_x + FORKLIFT_W + FORKLIFT_KNOCK
 	lda forklift_x_lo, x
 	clc
 	adc #FORKLIFT_W
@@ -3360,11 +3544,10 @@ forklift_knock_package:
 	lda temp_hi
 	adc #0
 	sta package_x_hi
-	lda #$20                ; small right toss (1/16 px units)
+	lda #$20
 	sta package_vel_x
 	jmp @sfx
 @knock_l:
-	; package_x = forklift_x - FORKLIFT_KNOCK - PKG_W
 	lda forklift_x_lo, x
 	sec
 	sbc #FORKLIFT_KNOCK
@@ -3384,11 +3567,11 @@ forklift_knock_package:
 	sta package_x_lo
 	sta package_x_hi
 @l_vel:
-	lda #$E0                ; small left toss
+	lda #$E0
 	sta package_vel_x
 @sfx:
 	lda #0
-	sta package_on_ground   ; allow brief slide before settling
+	sta package_on_ground
 	lda #SFX_HIT
 	jsr play_sfx
 	rts
@@ -3411,13 +3594,18 @@ draw_one_forklift:
 	sta temp
 	lda forklift_x_hi, x
 	sbc scroll_hi
-	bne @off                ; left of camera or ≥256 px right
-	; NES sprite X is 8-bit and wraps: hide if any tile would cross 256
+	bne @off
 	lda temp
-	cmp #256 - FORKLIFT_W   ; 240
+	cmp #256 - FORKLIFT_W
 	bcs @off
 	lda #FORKLIFT_Y
 	sta temp2
+	; flash while stunned (hide every other 4 frames)
+	lda forklift_stun, x
+	beq @vis
+	and #4
+	beq @off
+@vis:
 	lda forklift_dir, x
 	bne @flip
 	lda #<forklift_metasprite
@@ -3432,7 +3620,7 @@ draw_one_forklift:
 	sta metasprite_ptr_hi
 @draw:
 	txa
-	pha                     ; draw_metasprite uses X for OAM
+	pha
 	jsr draw_metasprite
 	pla
 	tax
