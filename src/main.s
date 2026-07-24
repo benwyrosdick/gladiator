@@ -3480,7 +3480,9 @@ forklift_hit_player:
 	clc
 	adc #PLAYER_H
 	sta temp3
-	; --- stomp: falling onto forklift top ---
+	; --- stomp: only if carrying package, falling onto top ---
+	lda forklift_has_pkg, x
+	beq @side                ; empty forklift — no stun
 	lda vel_y
 	bmi @side                ; rising
 	beq @side
